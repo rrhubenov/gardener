@@ -59,6 +59,7 @@ import (
 	cacheprometheus "github.com/gardener/gardener/pkg/component/observability/monitoring/prometheus/cache"
 	seedprometheus "github.com/gardener/gardener/pkg/component/observability/monitoring/prometheus/seed"
 	"github.com/gardener/gardener/pkg/component/observability/monitoring/prometheusoperator"
+	"github.com/gardener/gardener/pkg/component/observability/opentelemetry/opentelemetryoperator"
 	"github.com/gardener/gardener/pkg/component/observability/plutono"
 	seedsystem "github.com/gardener/gardener/pkg/component/seed/system"
 	sharedcomponent "github.com/gardener/gardener/pkg/component/shared"
@@ -72,13 +73,14 @@ import (
 )
 
 type components struct {
-	machineCRD    component.Deployer
-	extensionCRD  component.Deployer
-	etcdCRD       component.Deployer
-	istioCRD      component.Deployer
-	vpaCRD        component.Deployer
-	fluentCRD     component.Deployer
-	prometheusCRD component.DeployWaiter
+	machineCRD       component.Deployer
+	extensionCRD     component.Deployer
+	etcdCRD          component.Deployer
+	istioCRD         component.Deployer
+	vpaCRD           component.Deployer
+	fluentCRD        component.Deployer
+	prometheusCRD    component.DeployWaiter
+	openTelemetryCRD component.Deployer
 
 	clusterIdentity          component.DeployWaiter
 	gardenerResourceManager  component.DeployWaiter
@@ -110,6 +112,7 @@ type components struct {
 	seedPrometheus                component.DeployWaiter
 	aggregatePrometheus           component.DeployWaiter
 	alertManager                  component.DeployWaiter
+	openTelemetryOperator         component.DeployWaiter
 }
 
 func (r *Reconciler) instantiateComponents(
@@ -134,6 +137,7 @@ func (r *Reconciler) instantiateComponents(
 	c.vpaCRD = vpa.NewCRD(r.SeedClientSet.Applier(), nil)
 	c.fluentCRD = fluentoperator.NewCRDs(r.SeedClientSet.Applier())
 	c.prometheusCRD, err = prometheusoperator.NewCRDs(r.SeedClientSet.Client(), r.SeedClientSet.Applier())
+	c.openTelemetryCRD = opentelemetryoperator.NewCRDs(r.SeedClientSet.Applier())
 	if err != nil {
 		return
 	}
@@ -183,6 +187,11 @@ func (r *Reconciler) instantiateComponents(
 	}
 
 	// observability components
+	c.openTelemetryOperator, err = r.newOpenTelemetryOperator()
+	if err != nil {
+		return
+	}
+
 	c.fluentOperator, err = r.newFluentOperator()
 	if err != nil {
 		return
@@ -745,6 +754,15 @@ func (r *Reconciler) newFluentBit() (component.DeployWaiter, error) {
 		r.GardenNamespace,
 		gardenlethelper.IsLoggingEnabled(&r.Config),
 		gardenlethelper.IsValiEnabled(&r.Config),
+		v1beta1constants.PriorityClassNameSeedSystem600,
+	)
+}
+
+func (r *Reconciler) newOpenTelemetryOperator() (component.DeployWaiter, error) {
+	return sharedcomponent.NewOpenTelemetryOperator(
+		r.SeedClientSet.Client(),
+		r.GardenNamespace,
+		gardenlethelper.IsLoggingEnabled(&r.Config),
 		v1beta1constants.PriorityClassNameSeedSystem600,
 	)
 }
