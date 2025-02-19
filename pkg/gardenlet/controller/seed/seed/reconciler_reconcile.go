@@ -236,11 +236,11 @@ func (r *Reconciler) runReconcileSeedFlow(
 			Fn:     component.OpWait(c.prometheusCRD).Deploy,
 			SkipIf: seedIsGarden,
 		})
-		// deployOpenTelemetryCRD = g.Add(flow.Task{
-		// 	Name:   "Deploy OpenTelemetry-related custom resource definitions",
-		// 	Fn:     c.openTelemetryCRD.Deploy,
-		// 	SkipIf: seedIsGarden,
-		// })
+		deployOpenTelemetryCRD = g.Add(flow.Task{
+			Name:   "Deploy OpenTelemetry-related custom resource definitions",
+			Fn:     c.openTelemetryCRD.Deploy,
+			SkipIf: seedIsGarden,
+		})
 		syncPointCRDs = flow.NewTaskIDs(
 			deployMachineCRD,
 			deployExtensionCRD,
@@ -249,7 +249,7 @@ func (r *Reconciler) runReconcileSeedFlow(
 			deployVPACRD,
 			deployFluentCRD,
 			deployPrometheusCRD,
-			// deployOpenTelemetryCRD,
+			deployOpenTelemetryCRD,
 		)
 		_ = g.Add(flow.Task{
 			Name: "Deploying VPA for gardenlet",
@@ -416,12 +416,12 @@ func (r *Reconciler) runReconcileSeedFlow(
 			Fn:           c.kubeStateMetrics.Deploy,
 			Dependencies: flow.NewTaskIDs(syncPointReadyForSystemComponents),
 		})
-		// _ = g.Add(flow.Task{
-		// 	Name:         "Deploying OpenTelemetry Operator",
-		// 	Fn:           c.openTelemetryOperator.Deploy,
-		// 	Dependencies: flow.NewTaskIDs(syncPointReadyForSystemComponents),
-		// 	SkipIf:       seedIsGarden,
-		// })
+		_ = g.Add(flow.Task{
+			Name:         "Deploying OpenTelemetry Operator",
+			Fn:           c.openTelemetryOperator.Deploy,
+			Dependencies: flow.NewTaskIDs(syncPointReadyForSystemComponents),
+			SkipIf:       seedIsGarden,
+		})
 		deployFluentOperator = g.Add(flow.Task{
 			Name:         "Deploying Fluent Operator",
 			Fn:           c.fluentOperator.Deploy,
