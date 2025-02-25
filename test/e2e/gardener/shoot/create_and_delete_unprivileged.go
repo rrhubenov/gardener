@@ -5,7 +5,6 @@
 package shoot
 
 import (
-	"context"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -16,53 +15,80 @@ import (
 
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	. "github.com/gardener/gardener/pkg/utils/test/matchers"
-	e2e "github.com/gardener/gardener/test/e2e/gardener"
+	. "github.com/gardener/gardener/test/e2e"
+	. "github.com/gardener/gardener/test/e2e/gardener"
+	. "github.com/gardener/gardener/test/e2e/gardener/shoot/internal"
+	"github.com/gardener/gardener/test/e2e/gardener/shoot/internal/inclusterclient"
 )
 
 var _ = Describe("Shoot Tests", Label("Shoot", "default"), func() {
-	f := defaultShootCreationFramework()
-	f.GardenerFramework.Config.SkipAccessingShoot = false
+	Describe("Create and Delete Unprivileged Shoot", Ordered, Label("unprivileged", "basic"), func() {
+		var s *ShootContext
 
-	f.Shoot = e2e.DefaultShoot("e2e-unpriv")
-	f.Shoot.Spec.Kubernetes.KubeAPIServer.AdmissionPlugins = []gardencorev1beta1.AdmissionPlugin{
-		{
-			Name: "PodSecurity",
-			Config: &runtime.RawExtension{
-				Raw: []byte(`{
-						"apiVersion": "pod-security.admission.config.k8s.io/v1beta1",
-						"kind": "PodSecurityConfiguration",
-						"defaults": {
-						  "enforce": "restricted",
-						  "enforce-version": "latest"
-						}
-					  }`),
-			},
-		},
-	}
+		BeforeTestSetup(func() {
+			shoot := DefaultShoot("e2e-unpriv")
+			shoot.Spec.Kubernetes.KubeAPIServer.AdmissionPlugins = []gardencorev1beta1.AdmissionPlugin{
+				{
+					Name: "PodSecurity",
+					Config: &runtime.RawExtension{
+						Raw: []byte(`{
+  "apiVersion": "pod-security.admission.config.k8s.io/v1beta1",
+  "kind": "PodSecurityConfiguration",
+  "defaults": {
+    "enforce": "restricted",
+    "enforce-version": "latest"
+  }
+}`),
+					},
+				},
+			}
 
-	It("Create and Delete Unprivileged Shoot", Label("unprivileged", "basic"), func() {
-		By("Create Shoot")
-		ctx, cancel := context.WithTimeout(parentCtx, 15*time.Minute)
-		defer cancel()
+			s = NewTestContext().ForShoot(shoot)
+		})
 
-		Expect(f.CreateShootAndWaitForCreation(ctx, false)).To(Succeed())
-		f.Verify()
+		ItShouldCreateShoot(s)
+		ItShouldWaitForShootToBeReconciledAndHealthy(s)
+		ItShouldInitializeShootClient(s)
 
-		shootClient := f.ShootFramework.ShootClient.Client()
+		It("should allow creating pod in the kube-system namespace", func(ctx SpecContext) {
+			pod := newPodForNamespace(metav1.NamespaceSystem)
 
-		By("Create pod in the kube-system namespace")
-		Expect(shootClient.Create(ctx, newPodForNamespace(metav1.NamespaceSystem))).To(Succeed())
+			DeferCleanup(func(ctx SpecContext) {
+				Eventually(ctx, func() error {
+					return s.ShootClient.Delete(ctx, pod)
+				}).Should(Or(Succeed(), BeNotFoundError()))
+			}, NodeTimeout(time.Minute))
 
-		By("Create pod in the default namespace")
-		Expect(shootClient.Create(ctx, newPodForNamespace(metav1.NamespaceDefault))).To(And(
-			BeForbiddenError(),
-			MatchError(ContainSubstring("pods %q is forbidden: violates PodSecurity %q", "nginx", "restricted:latest")),
-		))
+			Eventually(ctx, func() error {
+				return s.ShootClient.Create(ctx, pod)
+			}).Should(Succeed())
+		}, SpecTimeout(time.Minute))
 
-		By("Delete Shoot")
-		ctx, cancel = context.WithTimeout(parentCtx, 15*time.Minute)
-		defer cancel()
-		Expect(f.DeleteShootAndWaitForDeletion(ctx, f.Shoot)).To(Succeed())
+		It("should forbid creating pod in the default namespace", func(ctx SpecContext) {
+			pod := newPodForNamespace(metav1.NamespaceDefault)
+
+			DeferCleanup(func(ctx SpecContext) {
+				// ensure test step leaves clean state even in the case of failure (the pod is allowed to be created)
+				Eventually(ctx, func() error {
+					return s.ShootClient.Delete(ctx, pod)
+				}).Should(Or(Succeed(), BeNotFoundError()))
+			}, NodeTimeout(time.Minute))
+
+			Eventually(ctx, func() error {
+				if err := s.ShootClient.Create(ctx, pod); err != nil {
+					return err
+				}
+				return StopTrying("pod was created")
+			}).Should(And(
+				BeForbiddenError(),
+				MatchError(ContainSubstring("pods %q is forbidden: violates PodSecurity %q", "nginx", "restricted:latest")),
+			))
+		}, SpecTimeout(time.Minute))
+
+		inclusterclient.VerifyInClusterAccessToAPIServer(s)
+
+		ItShouldDeleteShoot(s)
+		ItShouldWaitForShootToBeDeleted(s)
 	})
 })
 

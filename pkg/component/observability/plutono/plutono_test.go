@@ -29,13 +29,13 @@ import (
 	"github.com/gardener/gardener/pkg/resourcemanager/controller/garbagecollector/references"
 	"github.com/gardener/gardener/pkg/utils"
 	gardenerutils "github.com/gardener/gardener/pkg/utils/gardener"
+	kubernetesutils "github.com/gardener/gardener/pkg/utils/kubernetes"
 	"github.com/gardener/gardener/pkg/utils/retry"
 	retryfake "github.com/gardener/gardener/pkg/utils/retry/fake"
 	secretsmanager "github.com/gardener/gardener/pkg/utils/secrets/manager"
 	fakesecretsmanager "github.com/gardener/gardener/pkg/utils/secrets/manager/fake"
 	"github.com/gardener/gardener/pkg/utils/test"
 	. "github.com/gardener/gardener/pkg/utils/test/matchers"
-	testruntime "github.com/gardener/gardener/pkg/utils/test/runtime"
 )
 
 var _ = Describe("Plutono", func() {
@@ -599,12 +599,23 @@ status:
 			deployment := deploymentYAMLFor(values)
 			utilruntime.Must(references.InjectAnnotations(deployment))
 
+			plutonoConfigSecretYAML, err := kubernetesutils.Serialize(plutonoConfigSecret, c.Scheme())
+			Expect(err).NotTo(HaveOccurred())
+			serviceAccountYAML, err := kubernetesutils.Serialize(serviceAccount, c.Scheme())
+			Expect(err).NotTo(HaveOccurred())
+			roleYAML, err := kubernetesutils.Serialize(role, c.Scheme())
+			Expect(err).NotTo(HaveOccurred())
+			roleBindingYAML, err := kubernetesutils.Serialize(roleBinding, c.Scheme())
+			Expect(err).NotTo(HaveOccurred())
+			deploymentYAML, err := kubernetesutils.Serialize(deployment, c.Scheme())
+			Expect(err).NotTo(HaveOccurred())
+
 			Expect(manifests).To(ConsistOf(
-				testruntime.Serialize(plutonoConfigSecret, c.Scheme()),
-				testruntime.Serialize(serviceAccount, c.Scheme()),
-				testruntime.Serialize(role, c.Scheme()),
-				testruntime.Serialize(roleBinding, c.Scheme()),
-				testruntime.Serialize(deployment, c.Scheme()),
+				plutonoConfigSecretYAML,
+				serviceAccountYAML,
+				roleYAML,
+				roleBindingYAML,
+				deploymentYAML,
 				providerConfigMapYAML,
 				dataSourceConfigMapYAMLFor(values),
 				serviceYAMLFor(values),
@@ -704,17 +715,22 @@ status:
 
 	Describe("#Destroy", func() {
 		It("should successfully destroy all resources", func() {
+			dashboardConfigMap := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "plutono-dashboards", Namespace: namespace}}
+
 			component = New(c, namespace, fakeSecretManager, values)
 			Expect(c.Create(ctx, managedResource)).To(Succeed())
 			Expect(c.Create(ctx, managedResourceSecret)).To(Succeed())
+			Expect(c.Create(ctx, dashboardConfigMap)).To(Succeed())
 
 			Expect(c.Get(ctx, client.ObjectKeyFromObject(managedResource), managedResource)).To(Succeed())
 			Expect(c.Get(ctx, client.ObjectKeyFromObject(managedResourceSecret), managedResourceSecret)).To(Succeed())
+			Expect(c.Get(ctx, client.ObjectKeyFromObject(dashboardConfigMap), dashboardConfigMap)).To(Succeed())
 
 			Expect(component.Destroy(ctx)).To(Succeed())
 
 			Expect(c.Get(ctx, client.ObjectKeyFromObject(managedResource), managedResource)).To(BeNotFoundError())
 			Expect(c.Get(ctx, client.ObjectKeyFromObject(managedResourceSecret), managedResourceSecret)).To(BeNotFoundError())
+			Expect(c.Get(ctx, client.ObjectKeyFromObject(dashboardConfigMap), dashboardConfigMap)).To(BeNotFoundError())
 		})
 	})
 

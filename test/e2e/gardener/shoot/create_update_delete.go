@@ -12,7 +12,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
-	discoveryv1 "k8s.io/api/discovery/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
@@ -34,7 +34,7 @@ var _ = Describe("Shoot Tests", Label("Shoot", "default"), func() {
 		f := defaultShootCreationFramework()
 		f.Shoot = shoot
 		f.Shoot.Spec.Kubernetes.KubeAPIServer.EncryptionConfig = &gardencorev1beta1.EncryptionConfig{
-			Resources: []string{"services", "endpointslices.discovery.k8s.io"},
+			Resources: []string{"services", "clusterroles.rbac.authorization.k8s.io"},
 		}
 
 		// explicitly use one version below the latest supported minor version so that Kubernetes version update test can be
@@ -56,6 +56,7 @@ var _ = Describe("Shoot Tests", Label("Shoot", "default"), func() {
 			By("Create Shoot")
 			ctx, cancel := context.WithTimeout(parentCtx, 30*time.Minute)
 			defer cancel()
+
 			Expect(f.CreateShootAndWaitForCreation(ctx, false)).To(Succeed())
 			f.Verify()
 
@@ -80,7 +81,7 @@ var _ = Describe("Shoot Tests", Label("Shoot", "default"), func() {
 				g.Expect(readOnlyShootClient.Client().List(ctx, &corev1.ConfigMapList{})).To(Succeed())
 				g.Expect(readOnlyShootClient.Client().List(ctx, &corev1.SecretList{})).To(BeForbiddenError())
 				g.Expect(readOnlyShootClient.Client().List(ctx, &corev1.ServiceList{})).To(BeForbiddenError())
-				g.Expect(readOnlyShootClient.Client().List(ctx, &discoveryv1.EndpointSliceList{})).To(BeForbiddenError())
+				g.Expect(readOnlyShootClient.Client().List(ctx, &rbacv1.ClusterRoleList{})).To(BeForbiddenError())
 				g.Expect(readOnlyShootClient.Client().Create(ctx, &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{GenerateName: "test-", Namespace: metav1.NamespaceDefault}})).To(BeForbiddenError())
 				g.Expect(readOnlyShootClient.Client().Update(ctx, &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "kube-root-ca.crt", Namespace: metav1.NamespaceDefault}})).To(BeForbiddenError())
 				g.Expect(readOnlyShootClient.Client().Patch(ctx, &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "kube-root-ca.crt", Namespace: metav1.NamespaceDefault}}, client.RawPatch(types.MergePatchType, []byte("{}")))).To(BeForbiddenError())
@@ -117,11 +118,9 @@ var _ = Describe("Shoot Tests", Label("Shoot", "default"), func() {
 						}
 					}
 				}).Should(Succeed())
-			}
 
-			if !v1beta1helper.IsWorkerless(f.Shoot) {
-				// For workerless shoots, the status.networking section is not reported. Skip its verification accordingly.
 				By("Verify reported CIDRs")
+				// For workerless shoots, the status.networking section is not reported. Skip its verification accordingly.
 				Eventually(func(g Gomega) {
 					g.Expect(f.GardenClient.Client().Get(ctx, client.ObjectKeyFromObject(f.Shoot), f.Shoot)).To(Succeed())
 
@@ -137,6 +136,9 @@ var _ = Describe("Shoot Tests", Label("Shoot", "default"), func() {
 						g.Expect(networking.Pods).To(ConsistOf(*pods))
 					}
 				}).Should(Succeed())
+
+				// TODO: add back VerifyInClusterAccessToAPIServer once this test has been refactored to ordered containers
+				// inclusterclient.VerifyInClusterAccessToAPIServer(s)
 			}
 
 			By("Update Shoot")
@@ -146,6 +148,11 @@ var _ = Describe("Shoot Tests", Label("Shoot", "default"), func() {
 				GardenerFramework: f.GardenerFramework,
 				Shoot:             f.Shoot,
 			}, nil, nil)
+
+			// TODO: add back VerifyInClusterAccessToAPIServer once this test has been refactored to ordered containers
+			// if !v1beta1helper.IsWorkerless(s.Shoot) {
+			// 	inclusterclient.VerifyInClusterAccessToAPIServer(s)
+			// }
 
 			By("Add skip readiness annotation")
 			ctx, cancel = context.WithTimeout(parentCtx, 10*time.Minute)

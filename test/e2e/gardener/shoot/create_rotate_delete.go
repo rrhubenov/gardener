@@ -15,7 +15,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
@@ -95,7 +94,7 @@ func testCredentialRotationComplete(parentCtx context.Context, v rotationutils.V
 }
 
 func testCredentialRotationWithoutWorkersRollout(parentCtx context.Context, v rotationutils.Verifiers, f *framework.ShootCreationFramework) {
-	ctx, cancel := context.WithTimeout(parentCtx, 20*time.Minute)
+	ctx, cancel := context.WithTimeout(parentCtx, 30*time.Minute)
 	defer cancel()
 
 	By("Before credential rotation")
@@ -203,20 +202,18 @@ var _ = Describe("Shoot Tests", Label("Shoot", "default"), func() {
 		f := defaultShootCreationFramework()
 		f.Shoot = shoot
 
-		// Setting the kubernetes versions to < 1.27 as enableStaticTokenKubeconfig cannot be enabled
-		// for Shoot clusters with k8s version >= 1.27.
-		f.Shoot.Spec.Kubernetes.Version = "1.26.0"
-
-		// Explicitly enable the static token kubeconfig to test the kubeconfig rotation.
-		f.Shoot.Spec.Kubernetes.EnableStaticTokenKubeconfig = ptr.To(true)
-
 		It("Create Shoot, Rotate Credentials and Delete Shoot", Offset(1), Label("credentials-rotation"), func() {
-			ctx, cancel := context.WithTimeout(parentCtx, 20*time.Minute)
+			ctx, cancel := context.WithTimeout(parentCtx, 30*time.Minute)
 			defer cancel()
 
 			By("Create Shoot")
 			Expect(f.CreateShootAndWaitForCreation(ctx, false)).To(Succeed())
 			f.Verify()
+
+			// TODO: add back VerifyInClusterAccessToAPIServer once this test has been refactored to ordered containers
+			// if !v1beta1helper.IsWorkerless(s.Shoot) {
+			// 	inclusterclient.VerifyInClusterAccessToAPIServer(s)
+			// }
 
 			// isolated test for ssh key rotation (does not trigger node rolling update)
 			if !v1beta1helper.IsWorkerless(f.Shoot) && !withoutWorkersRollout {
@@ -226,7 +223,6 @@ var _ = Describe("Shoot Tests", Label("Shoot", "default"), func() {
 			v := rotationutils.Verifiers{
 				// basic verifiers checking secrets
 				&rotation.CAVerifier{ShootCreationFramework: f},
-				&rotation.KubeconfigVerifier{ShootCreationFramework: f},
 				&rotationutils.ObservabilityVerifier{
 					GetObservabilitySecretFunc: func(ctx context.Context) (*corev1.Secret, error) {
 						secret := &corev1.Secret{}
@@ -288,6 +284,14 @@ var _ = Describe("Shoot Tests", Label("Shoot", "default"), func() {
 			} else {
 				testCredentialRotationWithoutWorkersRollout(parentCtx, v, f)
 			}
+
+			By("Renew shoot client after credentials rotation")
+			Expect(f.ShootFramework.AddShoot(parentCtx, f.Shoot.Name, f.Shoot.Namespace)).To(Succeed())
+
+			// TODO: add back VerifyInClusterAccessToAPIServer once this test has been refactored to ordered containers
+			// if !v1beta1helper.IsWorkerless(s.Shoot) {
+			// 	inclusterclient.VerifyInClusterAccessToAPIServer(s)
+			// }
 
 			By("Delete Shoot")
 			ctx, cancel = context.WithTimeout(parentCtx, 20*time.Minute)

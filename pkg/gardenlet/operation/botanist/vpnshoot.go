@@ -28,7 +28,7 @@ func (b *Botanist) DefaultVPNShoot() (component.DeployWaiter, error) {
 		VPAEnabled:        b.Shoot.WantsVerticalPodAutoscaler,
 		VPAUpdateDisabled: b.Shoot.VPNVPAUpdateDisabled,
 		ReversedVPN: vpnshoot.ReversedVPNValues{
-			Header:      "outbound|1194||" + vpnseedserver.ServiceName + "." + b.Shoot.SeedNamespace + ".svc.cluster.local",
+			Header:      "outbound|1194||" + vpnseedserver.ServiceName + "." + b.Shoot.ControlPlaneNamespace + ".svc.cluster.local",
 			Endpoint:    b.outOfClusterAPIServerFQDN(),
 			OpenVPNPort: 8132,
 			IPFamilies:  b.Shoot.GetInfo().Spec.Networking.IPFamilies,
@@ -37,13 +37,12 @@ func (b *Botanist) DefaultVPNShoot() (component.DeployWaiter, error) {
 		HighAvailabilityNumberOfSeedServers:  b.Shoot.VPNHighAvailabilityNumberOfSeedServers,
 		HighAvailabilityNumberOfShootClients: b.Shoot.VPNHighAvailabilityNumberOfShootClients,
 		DisableNewVPN:                        !b.Shoot.UsesNewVPN,
-		KubernetesVersion:                    b.Shoot.KubernetesVersion,
 		SeedPodNetwork:                       b.Seed.GetInfo().Spec.Networks.Pods,
 	}
 
 	return vpnshoot.New(
 		b.SeedClientSet.Client(),
-		b.Shoot.SeedNamespace,
+		b.Shoot.ControlPlaneNamespace,
 		b.SecretsManager,
 		values,
 	), nil

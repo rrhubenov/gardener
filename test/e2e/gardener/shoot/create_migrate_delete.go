@@ -28,13 +28,24 @@ var _ = Describe("Shoot Tests", Label("Shoot", "control-plane-migration"), func(
 
 		It("Create, Migrate and Delete", Offset(1), func() {
 			By("Create Shoot")
-			ctx, cancel := context.WithTimeout(parentCtx, 15*time.Minute)
+			ctx, cancel := context.WithTimeout(parentCtx, 30*time.Minute)
 			defer cancel()
+
 			Expect(f.CreateShootAndWaitForCreation(ctx, false)).To(Succeed())
 			f.Verify()
 
+			// TODO: add back VerifyInClusterAccessToAPIServer once this test has been refactored to ordered containers
+			// if !v1beta1helper.IsWorkerless(s.Shoot) && !v1beta1helper.HibernationIsEnabled(s.Shoot) {
+			// 	// We can only verify in-cluster access to the API server before the migration in local e2e tests.
+			// 	// After the migration, the shoot API server's hostname still points to the source seed, because
+			// 	// the /etc/hosts entry is never updated. Hence, we talk to the API server for starting in-cluster
+			// 	// clients. That's also why the ShootMigrationTest is configured to skip all interactions with the
+			// 	// shoot API server for local e2e tests.
+			// 	inclusterclient.VerifyInClusterAccessToAPIServer(s)
+			// }
+
 			By("Migrate Shoot")
-			ctx, cancel = context.WithTimeout(parentCtx, 15*time.Minute)
+			ctx, cancel = context.WithTimeout(parentCtx, 20*time.Minute)
 			defer cancel()
 			t, err := newDefaultShootMigrationTest(ctx, f.Shoot, f.GardenerFramework)
 			Expect(err).ToNot(HaveOccurred())
@@ -42,7 +53,7 @@ var _ = Describe("Shoot Tests", Label("Shoot", "control-plane-migration"), func(
 			Expect(t.VerifyMigration(ctx)).To(Succeed())
 
 			By("Delete Shoot")
-			ctx, cancel = context.WithTimeout(parentCtx, 15*time.Minute)
+			ctx, cancel = context.WithTimeout(parentCtx, 20*time.Minute)
 			defer cancel()
 			Expect(f.DeleteShootAndWaitForDeletion(ctx, f.Shoot)).To(Succeed())
 		})

@@ -12,7 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Masterminds/semver/v3"
 	druidv1alpha1 "github.com/gardener/etcd-druid/api/v1alpha1"
 	"github.com/go-logr/logr"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
@@ -110,7 +109,6 @@ type Interface interface {
 func New(
 	log logr.Logger,
 	c client.Client,
-	reader client.Reader,
 	namespace string,
 	secretsManager secretsmanager.Interface,
 	values Values,
@@ -120,7 +118,6 @@ func New(
 
 	return &etcd{
 		client:         c,
-		apiReader:      reader,
 		log:            log,
 		namespace:      namespace,
 		secretsManager: secretsManager,
@@ -136,7 +133,6 @@ func New(
 
 type etcd struct {
 	client         client.Client
-	apiReader      client.Reader
 	log            logr.Logger
 	namespace      string
 	secretsManager secretsmanager.Interface
@@ -154,7 +150,6 @@ type Values struct {
 	StorageClassName            *string
 	DefragmentationSchedule     *string
 	CARotationPhase             gardencorev1beta1.CredentialsRotationPhase
-	RuntimeKubernetesVersion    *semver.Version
 	BackupConfig                *BackupConfig
 	MaintenanceTimeWindow       gardencorev1beta1.MaintenanceTimeWindow
 	EvictionRequirement         *string
@@ -181,6 +176,7 @@ func (e *etcd) Deploy(ctx context.Context) error {
 		replicas = e.computeReplicas(existingEtcd)
 
 		resourcesEtcd, resourcesBackupRestore = e.computeContainerResources()
+		resourcesCompactionJob                = e.computeCompactionJobContainerResources()
 		garbageCollectionPolicy               = druidv1alpha1.GarbageCollectionPolicy(druidv1alpha1.GarbageCollectionPolicyExponential)
 		garbageCollectionPeriod               = metav1.Duration{Duration: 12 * time.Hour}
 		compressionPolicy                     = druidv1alpha1.GzipCompression
@@ -251,7 +247,7 @@ func (e *etcd) Deploy(ctx context.Context) error {
 	}
 
 	clientService := &corev1.Service{}
-	gardenerutils.ReconcileTopologyAwareRoutingMetadata(clientService, e.values.TopologyAwareRoutingEnabled, e.values.RuntimeKubernetesVersion)
+	gardenerutils.ReconcileTopologyAwareRoutingMetadata(clientService, e.values.TopologyAwareRoutingEnabled)
 
 	ports := []networkingv1.NetworkPolicyPort{
 		{Port: ptr.To(intstr.FromInt32(etcdconstants.PortEtcdClient)), Protocol: ptr.To(corev1.ProtocolTCP)},
@@ -370,6 +366,7 @@ func (e *etcd) Deploy(ctx context.Context) error {
 			},
 			Port:                    ptr.To(etcdconstants.PortBackupRestore),
 			Resources:               resourcesBackupRestore,
+			CompactionResources:     resourcesCompactionJob,
 			GarbageCollectionPolicy: &garbageCollectionPolicy,
 			GarbageCollectionPeriod: &garbageCollectionPeriod,
 			SnapshotCompression:     &compressionSpec,
@@ -954,6 +951,15 @@ func (e *etcd) computeContainerResources() (*corev1.ResourceRequirements, *corev
 				corev1.ResourceMemory: resource.MustParse("40Mi"),
 			},
 		}
+}
+
+func (e *etcd) computeCompactionJobContainerResources() *corev1.ResourceRequirements {
+	return &corev1.ResourceRequirements{
+		Requests: corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse("600m"),
+			corev1.ResourceMemory: resource.MustParse("3Gi"),
+		},
+	}
 }
 
 func (e *etcd) computeReplicas(existingEtcd *druidv1alpha1.Etcd) int32 {

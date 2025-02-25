@@ -2,13 +2,14 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+// TODO(Wieneo): Remove component after Gardener v1.117 was released
+
 package authzserver
 
 import (
 	"context"
 	"fmt"
 
-	"github.com/Masterminds/semver/v3"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 	istionetworkingv1beta1 "istio.io/api/networking/v1beta1"
@@ -47,13 +48,11 @@ func New(
 	client client.Client,
 	namespace string,
 	imageExtAuthzServer string,
-	kubernetesVersion *semver.Version,
 ) component.DeployWaiter {
 	return &authzServer{
 		client:              client,
 		namespace:           namespace,
 		imageExtAuthzServer: imageExtAuthzServer,
-		kubernetesVersion:   kubernetesVersion,
 	}
 }
 
@@ -61,7 +60,6 @@ type authzServer struct {
 	client              client.Client
 	namespace           string
 	imageExtAuthzServer string
-	kubernetesVersion   *semver.Version
 }
 
 func (a *authzServer) Deploy(ctx context.Context) error {
@@ -115,7 +113,6 @@ func (a *authzServer) Deploy(ctx context.Context) error {
 							},
 							Resources: corev1.ResourceRequirements{
 								Requests: corev1.ResourceList{
-									corev1.ResourceCPU:    resource.MustParse("100m"),
 									corev1.ResourceMemory: resource.MustParse("100Mi"),
 								},
 							},
@@ -223,6 +220,7 @@ func (a *authzServer) Deploy(ctx context.Context) error {
 					MinAllowed: corev1.ResourceList{
 						corev1.ResourceMemory: resource.MustParse("100Mi"),
 					},
+					ControlledResources: &[]corev1.ResourceName{corev1.ResourceMemory},
 				},
 			},
 		}
@@ -282,9 +280,8 @@ func (a *authzServer) reconcilePodDisruptionBudget(ctx context.Context, pdb *pol
 			Selector: &metav1.LabelSelector{
 				MatchLabels: getLabels(),
 			},
+			UnhealthyPodEvictionPolicy: ptr.To(policyv1.AlwaysAllow),
 		}
-
-		kubernetesutils.SetAlwaysAllowEviction(pdb, a.kubernetesVersion)
 
 		return nil
 	})

@@ -236,6 +236,18 @@
       ],
     },
     {
+      // Group Dependency Watchdog updates in one PR.
+      groupName: 'dependency-watchdog',
+      matchDatasources: [
+        'docker',
+        'go',
+        'github-releases',
+      ],
+      matchPackageNames: [
+        '/.*?gardener\/dependency-watchdog$/',
+      ],
+    },
+    {
       // Ask for manual approval to create PRs for minor and major updates of dependencies which most likely
       // require manual adaptations of the code.
       matchDatasources: [
@@ -298,7 +310,7 @@
       matchPackageNames: [
         'gopkg.in/yaml.v2'
       ],
-      allowedVersions: "^v2\..+",
+      allowedVersions: "/^v2\\..+/",
     },
     {
       // Only patch level updates for golang-test image. Minor and major versions are updated manually.

@@ -20,10 +20,8 @@ func (b *Botanist) DefaultKubeScheduler() (component.DeployWaiter, error) {
 
 	return kubescheduler.New(
 		b.SeedClientSet.Client(),
-		b.Shoot.SeedNamespace,
+		b.Shoot.ControlPlaneNamespace,
 		b.SecretsManager,
-		b.Seed.KubernetesVersion,
-		b.Shoot.KubernetesVersion,
 		image.String(),
 		b.Shoot.GetReplicas(1),
 		b.Shoot.GetInfo().Spec.Kubernetes.KubeScheduler,

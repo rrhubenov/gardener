@@ -51,7 +51,7 @@ var _ = Describe("APIServerProxy", func() {
 		advertiseIPAddress string
 
 		managedResourceName = "shoot-core-apiserver-proxy"
-		namespace           = "some-namespace"
+		namespace           = "shoot--internal--internal"
 		image               = "some-image:some-tag"
 		sidecarImage        = "sidecar-image:some-tag"
 		proxySeedServerHost = "api.internal.local."
@@ -268,7 +268,7 @@ var _ = Describe("APIServerProxy", func() {
 
 		Context("IPv4", func() {
 			It("should deploy the managed resource successfully", func() {
-				test("607149fb")
+				test("6049033b")
 			})
 		})
 
@@ -279,7 +279,7 @@ var _ = Describe("APIServerProxy", func() {
 			})
 
 			It("should deploy the managed resource successfully", func() {
-				test("3fdb1aaf")
+				test("5460b295")
 			})
 		})
 	})
@@ -462,6 +462,13 @@ static_resources:
           "@type": type.googleapis.com/envoy.extensions.filters.network.tcp_proxy.v3.TcpProxy
           stat_prefix: kube_apiserver
           cluster: kube_apiserver
+          tunneling_config:
+            # hostname is irrelevant as it will be dropped by envoy, we still need it for the configuration though
+            hostname: "api.internal.local.:443"
+            headers_to_add:
+            - header:
+                key: Reversed-VPN
+                value: "outbound|443||kube-apiserver.shoot--internal--internal.svc.cluster.local"
           access_log:
           - name: envoy.access_loggers.stdout
             typed_config:
@@ -534,17 +541,7 @@ static_resources:
             address:
               socket_address:
                 address: api.internal.local.
-                port_value: 8443
-    transport_socket:
-      name: envoy.transport_sockets.upstream_proxy_protocol
-      typed_config:
-        "@type": type.googleapis.com/envoy.extensions.transport_sockets.proxy_protocol.v3.ProxyProtocolUpstreamTransport
-        config:
-          version: V2
-        transport_socket:
-          name: envoy.transport_sockets.raw_buffer
-          typed_config:
-            "@type": type.googleapis.com/envoy.extensions.transport_sockets.raw_buffer.v3.RawBuffer
+                port_value: 8132
     upstream_connection_options:
       tcp_keepalive:
         keepalive_time: 7200

@@ -386,43 +386,6 @@ var _ = Describe("Helper", func() {
 		)
 	})
 
-	Describe("#MutateShootKubeconfigRotation", func() {
-		It("should do nothing when mutate function is nil", func() {
-			shoot := &gardencorev1beta1.Shoot{}
-			MutateShootKubeconfigRotation(shoot, nil)
-			Expect(shoot.Status.Credentials).To(BeNil())
-		})
-
-		DescribeTable("mutate function not nil",
-			func(shoot *gardencorev1beta1.Shoot, lastInitiationTime metav1.Time) {
-				MutateShootKubeconfigRotation(shoot, func(rotation *gardencorev1beta1.ShootKubeconfigRotation) {
-					rotation.LastInitiationTime = &lastInitiationTime
-				})
-				Expect(shoot.Status.Credentials.Rotation.Kubeconfig.LastInitiationTime).To(PointTo(Equal(lastInitiationTime)))
-			},
-
-			Entry("credentials nil", &gardencorev1beta1.Shoot{}, metav1.Now()),
-			Entry("rotation nil", &gardencorev1beta1.Shoot{Status: gardencorev1beta1.ShootStatus{Credentials: &gardencorev1beta1.ShootCredentials{}}}, metav1.Now()),
-			Entry("kubeconfig nil", &gardencorev1beta1.Shoot{Status: gardencorev1beta1.ShootStatus{Credentials: &gardencorev1beta1.ShootCredentials{Rotation: &gardencorev1beta1.ShootCredentialsRotation{}}}}, metav1.Now()),
-			Entry("kubeconfig non-nil", &gardencorev1beta1.Shoot{Status: gardencorev1beta1.ShootStatus{Credentials: &gardencorev1beta1.ShootCredentials{Rotation: &gardencorev1beta1.ShootCredentialsRotation{Kubeconfig: &gardencorev1beta1.ShootKubeconfigRotation{}}}}}, metav1.Now()),
-		)
-	})
-
-	DescribeTable("#IsShootKubeconfigRotationInitiationTimeAfterLastCompletionTime",
-		func(credentials *gardencorev1beta1.ShootCredentials, matcher gomegatypes.GomegaMatcher) {
-			Expect(IsShootKubeconfigRotationInitiationTimeAfterLastCompletionTime(credentials)).To(matcher)
-		},
-
-		Entry("credentials nil", nil, BeFalse()),
-		Entry("rotation nil", &gardencorev1beta1.ShootCredentials{}, BeFalse()),
-		Entry("kubeconfig nil", &gardencorev1beta1.ShootCredentials{Rotation: &gardencorev1beta1.ShootCredentialsRotation{}}, BeFalse()),
-		Entry("lastInitiationTime nil", &gardencorev1beta1.ShootCredentials{Rotation: &gardencorev1beta1.ShootCredentialsRotation{Kubeconfig: &gardencorev1beta1.ShootKubeconfigRotation{}}}, BeFalse()),
-		Entry("lastCompletionTime nil", &gardencorev1beta1.ShootCredentials{Rotation: &gardencorev1beta1.ShootCredentialsRotation{Kubeconfig: &gardencorev1beta1.ShootKubeconfigRotation{LastInitiationTime: &metav1.Time{Time: metav1.Now().Time}}}}, BeTrue()),
-		Entry("lastCompletionTime before lastInitiationTime", &gardencorev1beta1.ShootCredentials{Rotation: &gardencorev1beta1.ShootCredentialsRotation{Kubeconfig: &gardencorev1beta1.ShootKubeconfigRotation{LastInitiationTime: &metav1.Time{Time: metav1.Now().Time}, LastCompletionTime: &metav1.Time{Time: metav1.Now().Add(-time.Minute)}}}}, BeTrue()),
-		Entry("lastCompletionTime equal lastInitiationTime", &gardencorev1beta1.ShootCredentials{Rotation: &gardencorev1beta1.ShootCredentialsRotation{Kubeconfig: &gardencorev1beta1.ShootKubeconfigRotation{LastInitiationTime: &metav1.Time{Time: metav1.Now().Time}, LastCompletionTime: &metav1.Time{Time: metav1.Now().Time}}}}, BeFalse()),
-		Entry("lastCompletionTime after lastInitiationTime", &gardencorev1beta1.ShootCredentials{Rotation: &gardencorev1beta1.ShootCredentialsRotation{Kubeconfig: &gardencorev1beta1.ShootKubeconfigRotation{LastInitiationTime: &metav1.Time{Time: metav1.Now().Time}, LastCompletionTime: &metav1.Time{Time: metav1.Now().Add(time.Minute)}}}}, BeFalse()),
-	)
-
 	Describe("#MutateShootSSHKeypairRotation", func() {
 		It("should do nothing when mutate function is nil", func() {
 			shoot := &gardencorev1beta1.Shoot{}
@@ -1481,4 +1444,64 @@ var _ = Describe("Helper", func() {
 			Expect(LastInitiationTimeForWorkerPool(poolName, []gardencorev1beta1.PendingWorkersRollout{{Name: poolName, LastInitiationTime: poolLastInitiationTime}}, globalLastInitiationTime)).To(Equal(poolLastInitiationTime))
 		})
 	})
+
+	Describe("#IsShootAutonomous", func() {
+		It("should return true (single worker pool with control plane configuration)", func() {
+			shoot := &gardencorev1beta1.Shoot{Spec: gardencorev1beta1.ShootSpec{Provider: gardencorev1beta1.Provider{Workers: []gardencorev1beta1.Worker{
+				{ControlPlane: &gardencorev1beta1.WorkerControlPlane{}},
+			}}}}
+			Expect(IsShootAutonomous(shoot)).To(BeTrue())
+		})
+
+		It("should return true (multiple worker pools, one with control plane configuration)", func() {
+			shoot := &gardencorev1beta1.Shoot{Spec: gardencorev1beta1.ShootSpec{Provider: gardencorev1beta1.Provider{Workers: []gardencorev1beta1.Worker{
+				{},
+				{ControlPlane: &gardencorev1beta1.WorkerControlPlane{}},
+				{},
+			}}}}
+			Expect(IsShootAutonomous(shoot)).To(BeTrue())
+		})
+
+		It("should return false (no worker pools)", func() {
+			shoot := &gardencorev1beta1.Shoot{}
+			Expect(IsShootAutonomous(shoot)).To(BeFalse())
+		})
+
+		It("should return false (worker pools, but none with control plane configuration)", func() {
+			shoot := &gardencorev1beta1.Shoot{Spec: gardencorev1beta1.ShootSpec{Provider: gardencorev1beta1.Provider{Workers: []gardencorev1beta1.Worker{
+				{},
+				{},
+				{},
+			}}}}
+			Expect(IsShootAutonomous(shoot)).To(BeFalse())
+		})
+	})
+
+	Describe("#ControlPlaneNamespaceForShoot", func() {
+		It("should return kube-system for autonomous shoots", func() {
+			shoot := &gardencorev1beta1.Shoot{
+				Spec:   gardencorev1beta1.ShootSpec{Provider: gardencorev1beta1.Provider{Workers: []gardencorev1beta1.Worker{{ControlPlane: &gardencorev1beta1.WorkerControlPlane{}}}}},
+				Status: gardencorev1beta1.ShootStatus{TechnicalID: "shoot--foo--bar"},
+			}
+			Expect(ControlPlaneNamespaceForShoot(shoot)).To(Equal("kube-system"))
+		})
+
+		It("should return the technical ID for regular shoots", func() {
+			shoot := &gardencorev1beta1.Shoot{
+				Status: gardencorev1beta1.ShootStatus{TechnicalID: "shoot--foo--bar"},
+			}
+			Expect(ControlPlaneNamespaceForShoot(shoot)).To(Equal("shoot--foo--bar"))
+		})
+	})
+
+	DescribeTable("#IsUpdateStrategyInPlace",
+		func(updateStrategy *gardencorev1beta1.MachineUpdateStrategy, expected bool) {
+			Expect(IsUpdateStrategyInPlace(updateStrategy)).To(Equal(expected))
+		},
+
+		Entry("with nil", nil, false),
+		Entry("with AutoRollingUpdate update strategy", ptr.To(gardencorev1beta1.AutoRollingUpdate), false),
+		Entry("with AutoInPlaceUpdate update strategy", ptr.To(gardencorev1beta1.AutoInPlaceUpdate), true),
+		Entry("with ManualInPlaceUpdate  update strategy", ptr.To(gardencorev1beta1.ManualInPlaceUpdate), true),
+	)
 })

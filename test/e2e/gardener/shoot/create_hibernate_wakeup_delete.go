@@ -33,7 +33,7 @@ var _ = Describe("Shoot Tests", Label("Shoot", "default"), func() {
 		f.Shoot = shoot
 
 		It("Create, Hibernate, Wake up and Delete Shoot", Offset(1), func() {
-			ctx, cancel := context.WithTimeout(parentCtx, 15*time.Minute)
+			ctx, cancel := context.WithTimeout(parentCtx, 30*time.Minute)
 			defer cancel()
 
 			if shoot.Spec.CloudProfileName == nil && shoot.Spec.CloudProfile != nil && shoot.Spec.CloudProfile.Kind == "NamespacedCloudProfile" {
@@ -43,9 +43,7 @@ var _ = Describe("Shoot Tests", Label("Shoot", "default"), func() {
 				Expect(f.GardenClient.Client().Create(ctx, namespacedCloudProfile)).To(Succeed())
 				DeferCleanup(func() {
 					By("Delete NamespacedCloudProfile")
-					ctx, cancel = context.WithTimeout(parentCtx, 15*time.Minute)
-					defer cancel()
-					Expect(f.GardenClient.Client().Delete(ctx, namespacedCloudProfile)).To(Or(Succeed(), BeNotFoundError()))
+					Expect(f.GardenClient.Client().Delete(parentCtx, namespacedCloudProfile)).To(Or(Succeed(), BeNotFoundError()))
 				})
 
 				By("Wait for new NamespacedCloudProfile to be reconciled")
@@ -80,14 +78,17 @@ var _ = Describe("Shoot Tests", Label("Shoot", "default"), func() {
 			Expect(f.CreateShootAndWaitForCreation(ctx, false)).To(Succeed())
 			f.Verify()
 
+			// TODO: add back VerifyInClusterAccessToAPIServer once this test has been refactored to ordered containers
+			// if !v1beta1helper.IsWorkerless(s.Shoot) {
+			// 	inclusterclient.VerifyInClusterAccessToAPIServer(s)
+			// }
+
 			if !v1beta1helper.IsWorkerless(f.Shoot) {
 				By("Verify Bootstrapping of Nodes with node-critical components")
 				// We verify the node readiness feature in this specific e2e test because it uses a single-node shoot cluster.
 				// The default shoot e2e test deals with multiple nodes, deleting all of them and waiting for them to be recreated
 				// might increase the test duration undesirably.
-				ctx, cancel = context.WithTimeout(parentCtx, 15*time.Minute)
-				defer cancel()
-				node.VerifyNodeCriticalComponentsBootstrapping(ctx, f.ShootFramework)
+				node.VerifyNodeCriticalComponentsBootstrapping(parentCtx, f.ShootFramework)
 			}
 
 			By("Hibernate Shoot")
@@ -96,12 +97,17 @@ var _ = Describe("Shoot Tests", Label("Shoot", "default"), func() {
 			Expect(f.HibernateShoot(ctx, f.Shoot)).To(Succeed())
 
 			By("Wake up Shoot")
-			ctx, cancel = context.WithTimeout(parentCtx, 15*time.Minute)
+			ctx, cancel = context.WithTimeout(parentCtx, 20*time.Minute)
 			defer cancel()
 			Expect(f.WakeUpShoot(ctx, f.Shoot)).To(Succeed())
 
+			// TODO: add back VerifyInClusterAccessToAPIServer once this test has been refactored to ordered containers
+			// if !v1beta1helper.IsWorkerless(s.Shoot) {
+			// 	inclusterclient.VerifyInClusterAccessToAPIServer(parentCtx, s)
+			// }
+
 			By("Delete Shoot")
-			ctx, cancel = context.WithTimeout(parentCtx, 15*time.Minute)
+			ctx, cancel = context.WithTimeout(parentCtx, 20*time.Minute)
 			defer cancel()
 			Expect(f.DeleteShootAndWaitForDeletion(ctx, f.Shoot)).To(Succeed())
 		})

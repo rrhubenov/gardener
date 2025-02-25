@@ -36,7 +36,6 @@ func (b *Botanist) DefaultCoreDNS() (coredns.Interface, error) {
 		Image:                           image.String(),
 		AutoscalingMode:                 gardencorev1beta1.CoreDNSAutoscalingModeHorizontal,
 		SearchPathRewriteCommonSuffixes: getCommonSuffixesForRewriting(b.Shoot.GetInfo().Spec.SystemComponents),
-		KubernetesVersion:               b.Shoot.KubernetesVersion,
 		// Pod/node network CIDRs and cluster IPs are set on deployment to handle dynamic network CIDRs
 	}
 
@@ -54,7 +53,7 @@ func (b *Botanist) DefaultCoreDNS() (coredns.Interface, error) {
 		values.WantsVerticalPodAutoscaler = b.Shoot.WantsVerticalPodAutoscaler
 	}
 
-	return coredns.New(b.SeedClientSet.Client(), b.Shoot.SeedNamespace, values), nil
+	return coredns.New(b.SeedClientSet.Client(), b.Shoot.ControlPlaneNamespace, values), nil
 }
 
 // DeployCoreDNS deploys the CoreDNS system component.

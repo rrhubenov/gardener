@@ -49,6 +49,9 @@ var APIGroupControllerMap = map[string]map[string]versionutils.VersionRange{
 		"csrcleaner":   {},
 		"csrsigning":   {},
 	},
+	"certificates/v1alpha1": {
+		"kube-apiserver-serving-clustertrustbundle-publisher-controller": {AddedInVersion: "1.32"},
+	},
 	"certificates/v1beta1": {
 		"csrsigning": {},
 	},
@@ -76,10 +79,19 @@ var APIGroupControllerMap = map[string]map[string]versionutils.VersionRange{
 		"clusterrole-aggregation": {},
 	},
 	"resource/v1alpha2": {
-		"resource-claim-controller": {AddedInVersion: "1.27", RemovedInVersion: "1.31"},
+		"resource-claim-controller": {RemovedInVersion: "1.31"},
 	},
 	"resource/v1alpha3": {
-		"resource-claim-controller": {AddedInVersion: "1.31"},
+		"resource-claim-controller": {AddedInVersion: "1.31", RemovedInVersion: "1.32"},
+	},
+	"resource/v1beta1": {
+		"resource-claim-controller": {AddedInVersion: "1.32"},
+	},
+	"storage/v1": {
+		"selinux-warning-controller": {AddedInVersion: "1.32"},
+	},
+	"storage/v1beta1": {
+		"volumeattributesclass-protection-controller": {AddedInVersion: "1.32"},
 	},
 	"storagemigration/v1alpha1": {
 		"storage-version-migrator-controller": {AddedInVersion: "1.30"},
@@ -112,10 +124,11 @@ var APIGroupControllerMap = map[string]map[string]versionutils.VersionRange{
 		"pvc-protection":                       {},
 		"replicaset":                           {},
 		"replicationcontroller":                {},
-		"resource-claim-controller":            {AddedInVersion: "1.27"},
+		"resource-claim-controller":            {},
 		"resourcequota":                        {},
 		"root-ca-cert-publisher":               {},
 		"route":                                {},
+		"selinux-warning-controller":           {AddedInVersion: "1.32"},
 		"service":                              {},
 		"service-cidr-controller":              {AddedInVersion: "1.29"},
 		"serviceaccount":                       {},
@@ -125,5 +138,6 @@ var APIGroupControllerMap = map[string]map[string]versionutils.VersionRange{
 		"tokencleaner":                         {},
 		"ttl":                                  {},
 		"ttl-after-finished":                   {},
+		"volumeattributesclass-protection-controller": {AddedInVersion: "1.32"},
 	},
 }

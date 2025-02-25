@@ -22,7 +22,8 @@ import (
 )
 
 var (
-	metadata = metav1.ObjectMeta{
+	machineImageName = "some-machine-image"
+	metadata         = metav1.ObjectMeta{
 		Name: "profile",
 	}
 	machineType = core.MachineType{
@@ -192,7 +193,7 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 						},
 						MachineImages: []core.MachineImage{
 							{
-								Name: "some-machineimage",
+								Name: machineImageName,
 								Versions: []core.MachineImageVersion{
 									{
 										ExpirableVersion: core.ExpirableVersion{
@@ -399,7 +400,7 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 				It("should forbid duplicate names in list of machine images", func() {
 					cloudProfile.Spec.MachineImages = []core.MachineImage{
 						{
-							Name: "some-machineimage",
+							Name: machineImageName,
 							Versions: []core.MachineImageVersion{
 								{
 									ExpirableVersion: core.ExpirableVersion{
@@ -413,7 +414,7 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 							UpdateStrategy: &updateStrategyMajor,
 						},
 						{
-							Name: "some-machineimage",
+							Name: machineImageName,
 							Versions: []core.MachineImageVersion{
 								{
 									ExpirableVersion: core.ExpirableVersion{
@@ -438,7 +439,7 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 
 				It("should forbid machine images with no version", func() {
 					cloudProfile.Spec.MachineImages = []core.MachineImage{
-						{Name: "some-machineimage"},
+						{Name: machineImageName},
 					}
 
 					errorList := ValidateCloudProfile(cloudProfile)
@@ -459,7 +460,7 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 					updateStrategy := core.MachineImageUpdateStrategy("dummy")
 					cloudProfile.Spec.MachineImages = []core.MachineImage{
 						{
-							Name: "some-machineimage",
+							Name: machineImageName,
 							Versions: []core.MachineImageVersion{
 								{
 									ExpirableVersion: core.ExpirableVersion{
@@ -486,7 +487,7 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 					updateStrategy := core.UpdateStrategyMinor
 					cloudProfile.Spec.MachineImages = []core.MachineImage{
 						{
-							Name: "some-machineimage",
+							Name: machineImageName,
 							Versions: []core.MachineImageVersion{
 								{
 									ExpirableVersion: core.ExpirableVersion{
@@ -509,7 +510,7 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 				It("should forbid nonSemVer machine image versions", func() {
 					cloudProfile.Spec.MachineImages = []core.MachineImage{
 						{
-							Name: "some-machineimage",
+							Name: machineImageName,
 							Versions: []core.MachineImageVersion{
 								{
 									ExpirableVersion: core.ExpirableVersion{
@@ -552,7 +553,7 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 				It("should forbid non semver min supported version for in-place update", func() {
 					cloudProfile.Spec.MachineImages = []core.MachineImage{
 						{
-							Name: "some-machineimage",
+							Name: machineImageName,
 							Versions: []core.MachineImageVersion{
 								{
 									ExpirableVersion: core.ExpirableVersion{
@@ -597,7 +598,7 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 					expirationDate := &metav1.Time{Time: time.Now().AddDate(0, 0, 1)}
 					cloudProfile.Spec.MachineImages = []core.MachineImage{
 						{
-							Name: "some-machineimage",
+							Name: machineImageName,
 							Versions: []core.MachineImageVersion{
 								{
 									ExpirableVersion: core.ExpirableVersion{
@@ -644,7 +645,7 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 					classification := core.VersionClassification("dummy")
 					cloudProfile.Spec.MachineImages = []core.MachineImage{
 						{
-							Name: "some-machineimage",
+							Name: machineImageName,
 							Versions: []core.MachineImageVersion{
 								{
 									ExpirableVersion: core.ExpirableVersion{
@@ -670,7 +671,7 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 				It("should allow valid CPU architecture for machine image versions", func() {
 					cloudProfile.Spec.MachineImages = []core.MachineImage{
 						{
-							Name: "some-machineimage",
+							Name: machineImageName,
 							Versions: []core.MachineImageVersion{
 								{
 									ExpirableVersion: core.ExpirableVersion{
@@ -705,7 +706,7 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 				It("should forbid invalid CPU architecture for machine image versions", func() {
 					cloudProfile.Spec.MachineImages = []core.MachineImage{
 						{
-							Name: "some-machineimage",
+							Name: machineImageName,
 							Versions: []core.MachineImageVersion{
 								{
 									ExpirableVersion: core.ExpirableVersion{
@@ -729,7 +730,7 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 				It("should allow valid kubeletVersionConstraint for machine image versions", func() {
 					cloudProfile.Spec.MachineImages = []core.MachineImage{
 						{
-							Name: "some-machineimage",
+							Name: machineImageName,
 							Versions: []core.MachineImageVersion{
 								{
 									ExpirableVersion: core.ExpirableVersion{
@@ -759,7 +760,7 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 				It("should forbid invalid kubeletVersionConstraint for machine image versions", func() {
 					cloudProfile.Spec.MachineImages = []core.MachineImage{
 						{
-							Name: "some-machineimage",
+							Name: machineImageName,
 							Versions: []core.MachineImageVersion{
 								{
 									ExpirableVersion: core.ExpirableVersion{
@@ -1125,7 +1126,7 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 
 				It("should forbid preview image", func() {
 					cloudProfile.Spec.Bastion = &core.Bastion{
-						MachineImage: &core.BastionMachineImage{Name: "some-machineimage"},
+						MachineImage: &core.BastionMachineImage{Name: machineImageName},
 					}
 					cloudProfile.Spec.MachineImages[0].Versions[0].Classification = &previewClassification
 					cloudProfile.Spec.MachineImages[0].Versions[0].Architectures = []string{"amd64"}
@@ -1140,7 +1141,7 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 
 				It("should forbid no arch images", func() {
 					cloudProfile.Spec.Bastion = &core.Bastion{
-						MachineImage: &core.BastionMachineImage{Name: "some-machineimage"},
+						MachineImage: &core.BastionMachineImage{Name: machineImageName},
 					}
 					cloudProfile.Spec.MachineImages[0].Versions[0].Classification = &supportedClassification
 					cloudProfile.Spec.MachineImages[0].Versions[0].Architectures = []string{}
@@ -1158,7 +1159,7 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 
 				It("should allow images with supported classification and architecture specification", func() {
 					cloudProfile.Spec.Bastion = &core.Bastion{
-						MachineImage: &core.BastionMachineImage{Name: "some-machineimage"},
+						MachineImage: &core.BastionMachineImage{Name: machineImageName},
 					}
 					cloudProfile.Spec.MachineImages[0].Versions[0].Classification = &supportedClassification
 					cloudProfile.Spec.MachineImages[0].Versions[0].Architectures = []string{"amd64"}
@@ -1171,7 +1172,7 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 					cloudProfile.Spec.Bastion = &core.Bastion{
 						MachineType: &core.BastionMachineType{Name: machineType.Name},
 						MachineImage: &core.BastionMachineImage{
-							Name:    "some-machineimage",
+							Name:    machineImageName,
 							Version: ptr.To("1.2.3"),
 						},
 					}
@@ -1186,7 +1187,7 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 					cloudProfile.Spec.Bastion = &core.Bastion{
 						MachineType: &core.BastionMachineType{Name: machineType.Name},
 						MachineImage: &core.BastionMachineImage{
-							Name:    "some-machineimage",
+							Name:    machineImageName,
 							Version: ptr.To("1.2.3"),
 						},
 					}
@@ -1205,7 +1206,7 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 					cloudProfile.Spec.Bastion = &core.Bastion{
 						MachineType: nil,
 						MachineImage: &core.BastionMachineImage{
-							Name:    "some-machineimage",
+							Name:    machineImageName,
 							Version: ptr.To("1.2.3"),
 						},
 					}
@@ -1215,6 +1216,50 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 
 					errorList := ValidateCloudProfile(cloudProfile)
 					Expect(errorList).To(BeEmpty())
+				})
+			})
+
+			Context("limits validation", func() {
+				It("should allow unset limits", func() {
+					cloudProfile.Spec.Limits = nil
+
+					Expect(ValidateCloudProfile(cloudProfile)).To(BeEmpty())
+				})
+
+				It("should allow empty limits", func() {
+					cloudProfile.Spec.Limits = &core.Limits{}
+
+					Expect(ValidateCloudProfile(cloudProfile)).To(BeEmpty())
+				})
+
+				It("should allow positive maxNodesTotal", func() {
+					cloudProfile.Spec.Limits = &core.Limits{
+						MaxNodesTotal: ptr.To[int32](100),
+					}
+
+					Expect(ValidateCloudProfile(cloudProfile)).To(BeEmpty())
+				})
+
+				It("should forbid zero maxNodesTotal", func() {
+					cloudProfile.Spec.Limits = &core.Limits{
+						MaxNodesTotal: ptr.To[int32](0),
+					}
+
+					Expect(ValidateCloudProfile(cloudProfile)).To(ConsistOf(PointTo(MatchFields(IgnoreExtras, Fields{
+						"Type":  Equal(field.ErrorTypeInvalid),
+						"Field": Equal("spec.limits.maxNodesTotal"),
+					}))))
+				})
+
+				It("should forbid negative maxNodesTotal", func() {
+					cloudProfile.Spec.Limits = &core.Limits{
+						MaxNodesTotal: ptr.To[int32](-1),
+					}
+
+					Expect(ValidateCloudProfile(cloudProfile)).To(ConsistOf(PointTo(MatchFields(IgnoreExtras, Fields{
+						"Type":  Equal(field.ErrorTypeInvalid),
+						"Field": Equal("spec.limits.maxNodesTotal"),
+					}))))
 				})
 			})
 
@@ -1237,7 +1282,7 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 		dateInThePast   = &metav1.Time{Time: time.Now().AddDate(-5, 0, 0)}
 	)
 
-	Describe("#ValidateCloudProfileSpecUpdate", func() {
+	Describe("#ValidateCloudProfileUpdate", func() {
 		BeforeEach(func() {
 			cloudProfileNew = &core.CloudProfile{
 				ObjectMeta: metav1.ObjectMeta{
@@ -1248,7 +1293,7 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 					Type: "aws",
 					MachineImages: []core.MachineImage{
 						{
-							Name: "some-machineimage",
+							Name: machineImageName,
 							Versions: []core.MachineImageVersion{
 								{
 									ExpirableVersion: core.ExpirableVersion{
@@ -1335,6 +1380,78 @@ var _ = Describe("CloudProfile Validation Tests ", func() {
 				errorList := ValidateCloudProfileUpdate(cloudProfileNew, cloudProfileOld)
 
 				Expect(errorList).To(BeEmpty())
+			})
+		})
+
+		Context("limits validation", func() {
+			It("should allow adding limits", func() {
+				cloudProfileNew.Spec.Limits = &core.Limits{
+					MaxNodesTotal: ptr.To[int32](100),
+				}
+
+				Expect(ValidateCloudProfileUpdate(cloudProfileNew, cloudProfileOld)).To(BeEmpty())
+			})
+
+			It("should allow removing limits", func() {
+				cloudProfileOld.Spec.Limits = &core.Limits{
+					MaxNodesTotal: ptr.To[int32](100),
+				}
+
+				Expect(ValidateCloudProfileUpdate(cloudProfileNew, cloudProfileOld)).To(BeEmpty())
+			})
+
+			It("should allow adding maxNodesTotal", func() {
+				cloudProfileOld.Spec.Limits = &core.Limits{}
+				cloudProfileNew.Spec.Limits = &core.Limits{
+					MaxNodesTotal: ptr.To[int32](100),
+				}
+
+				Expect(ValidateCloudProfileUpdate(cloudProfileNew, cloudProfileOld)).To(BeEmpty())
+			})
+
+			It("should allow removing maxNodesTotal", func() {
+				cloudProfileOld.Spec.Limits = &core.Limits{
+					MaxNodesTotal: ptr.To[int32](100),
+				}
+				cloudProfileNew.Spec.Limits = &core.Limits{}
+
+				Expect(ValidateCloudProfileUpdate(cloudProfileNew, cloudProfileOld)).To(BeEmpty())
+			})
+
+			It("should allow unchanged maxNodesTotal", func() {
+				cloudProfileOld.Spec.Limits = &core.Limits{
+					MaxNodesTotal: ptr.To[int32](100),
+				}
+				cloudProfileNew.Spec.Limits = &core.Limits{
+					MaxNodesTotal: ptr.To[int32](100),
+				}
+
+				Expect(ValidateCloudProfileUpdate(cloudProfileNew, cloudProfileOld)).To(BeEmpty())
+			})
+
+			It("should allow increasing maxNodesTotal", func() {
+				cloudProfileOld.Spec.Limits = &core.Limits{
+					MaxNodesTotal: ptr.To[int32](100),
+				}
+				cloudProfileNew.Spec.Limits = &core.Limits{
+					MaxNodesTotal: ptr.To[int32](1000),
+				}
+
+				Expect(ValidateCloudProfileUpdate(cloudProfileNew, cloudProfileOld)).To(BeEmpty())
+			})
+
+			It("should forbid decreasing maxNodesTotal", func() {
+				cloudProfileOld.Spec.Limits = &core.Limits{
+					MaxNodesTotal: ptr.To[int32](100),
+				}
+				cloudProfileNew.Spec.Limits = &core.Limits{
+					MaxNodesTotal: ptr.To[int32](10),
+				}
+
+				Expect(ValidateCloudProfileUpdate(cloudProfileNew, cloudProfileOld)).To(ConsistOf(PointTo(MatchFields(IgnoreExtras, Fields{
+					"Type":  Equal(field.ErrorTypeInvalid),
+					"Field": Equal("spec.limits.maxNodesTotal"),
+				}))))
 			})
 		})
 	})

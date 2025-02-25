@@ -14,6 +14,7 @@ import (
 	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 	"github.com/gardener/gardener/pkg/component"
 	kubeapiserverexposure "github.com/gardener/gardener/pkg/component/kubernetes/apiserverexposure"
+	"github.com/gardener/gardener/pkg/features"
 	gardenerutils "github.com/gardener/gardener/pkg/utils/gardener"
 )
 
@@ -22,7 +23,7 @@ func (b *Botanist) DefaultKubeAPIServerService() component.DeployWaiter {
 	return kubeapiserverexposure.NewService(
 		b.Logger,
 		b.SeedClientSet.Client(),
-		b.Shoot.SeedNamespace,
+		b.Shoot.ControlPlaneNamespace,
 		&kubeapiserverexposure.ServiceValues{
 			AnnotationsFunc:             func() map[string]string { return b.IstioLoadBalancerAnnotations() },
 			TopologyAwareRoutingEnabled: b.Shoot.TopologyAwareRoutingEnabled,
@@ -50,7 +51,7 @@ func (b *Botanist) DefaultKubeAPIServerSNI() component.DeployWaiter {
 	return component.OpDestroyWithoutWait(kubeapiserverexposure.NewSNI(
 		b.SeedClientSet.Client(),
 		v1beta1constants.DeploymentNameKubeAPIServer,
-		b.Shoot.SeedNamespace,
+		b.Shoot.ControlPlaneNamespace,
 		func() *kubeapiserverexposure.SNIValues {
 			return &kubeapiserverexposure.SNIValues{
 				IstioIngressGateway: kubeapiserverexposure.IstioIngressGateway{
@@ -90,9 +91,9 @@ func (b *Botanist) setAPIServerServiceClusterIPs(clusterIPs []string) {
 	b.Shoot.Components.ControlPlane.KubeAPIServerSNI = kubeapiserverexposure.NewSNI(
 		b.SeedClientSet.Client(),
 		v1beta1constants.DeploymentNameKubeAPIServer,
-		b.Shoot.SeedNamespace,
+		b.Shoot.ControlPlaneNamespace,
 		func() *kubeapiserverexposure.SNIValues {
-			return &kubeapiserverexposure.SNIValues{
+			values := &kubeapiserverexposure.SNIValues{
 				Hosts: []string{
 					gardenerutils.GetAPIServerDomain(*b.Shoot.ExternalClusterDomain),
 					gardenerutils.GetAPIServerDomain(b.Shoot.InternalClusterDomain),
@@ -105,6 +106,12 @@ func (b *Botanist) setAPIServerServiceClusterIPs(clusterIPs []string) {
 					Labels:    b.IstioLabels(),
 				},
 			}
+
+			if features.DefaultFeatureGate.Enabled(features.RemoveAPIServerProxyLegacyPort) {
+				values.APIServerProxy = nil
+			}
+
+			return values
 		},
 	)
 }
@@ -121,7 +128,7 @@ func mapToReservedKubeApiServerRange(ip net.IP) string {
 func (b *Botanist) DefaultKubeAPIServerIngress() component.Deployer {
 	return kubeapiserverexposure.NewIngress(
 		b.SeedClientSet.Client(),
-		b.Shoot.SeedNamespace,
+		b.Shoot.ControlPlaneNamespace,
 		kubeapiserverexposure.IngressValues{
 			ServiceName: v1beta1constants.DeploymentNameKubeAPIServer,
 			Host:        b.ComputeKubeAPIServerHost(),

@@ -43,7 +43,7 @@ const (
 	name                = "apiserver-proxy"
 
 	adminPort           = 16910
-	proxySeedServerPort = 8443
+	proxySeedServerPort = 8132
 	portNameMetrics     = "metrics"
 
 	volumeNameConfig   = "proxy-config"
@@ -207,6 +207,7 @@ func (a *apiserverProxy) computeResourcesData() (map[string][]byte, error) {
 		"adminPort":           adminPort,
 		"proxySeedServerHost": a.values.ProxySeedServerHost,
 		"proxySeedServerPort": proxySeedServerPort,
+		"seedNamespace":       a.namespace,
 	}); err != nil {
 		return nil, err
 	}

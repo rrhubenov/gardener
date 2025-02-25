@@ -47,8 +47,8 @@ var _ = Describe("Garden Care controller tests", func() {
 			Spec: operatorv1alpha1.GardenSpec{
 				RuntimeCluster: operatorv1alpha1.RuntimeCluster{
 					Networking: operatorv1alpha1.RuntimeNetworking{
-						Pods:     "10.1.0.0/16",
-						Services: "10.2.0.0/16",
+						Pods:     []string{"10.1.0.0/16"},
+						Services: []string{"10.2.0.0/16"},
 					},
 					Ingress: operatorv1alpha1.Ingress{
 						Domains: []operatorv1alpha1.DNSDomain{{Name: "ingress.runtime-garden.local.gardener.cloud"}},
@@ -73,7 +73,7 @@ var _ = Describe("Garden Care controller tests", func() {
 						ClusterIdentity: "test",
 					},
 					Kubernetes: operatorv1alpha1.Kubernetes{
-						Version: "1.26.3",
+						Version: "1.31.1",
 					},
 					Maintenance: operatorv1alpha1.Maintenance{
 						TimeWindow: gardencorev1beta1.MaintenanceTimeWindow{
@@ -82,7 +82,7 @@ var _ = Describe("Garden Care controller tests", func() {
 						},
 					},
 					Networking: operatorv1alpha1.Networking{
-						Services: "100.64.0.0/13",
+						Services: []string{"100.64.0.0/13"},
 					},
 				},
 			},
@@ -533,10 +533,11 @@ func updateETCDStatusToHealthy(name string) {
 	ExpectWithOffset(1, testClient.Get(ctx, client.ObjectKeyFromObject(etcd), etcd)).To(Succeed())
 
 	etcd.Status.ObservedGeneration = &etcd.Generation
-	etcd.Status.Ready = ptr.To(true)
 	etcd.Status.Conditions = []druidv1alpha1.Condition{
 		{Type: druidv1alpha1.ConditionTypeBackupReady, Status: druidv1alpha1.ConditionTrue, LastTransitionTime: metav1.Now(), LastUpdateTime: metav1.Now()},
+		{Type: druidv1alpha1.ConditionTypeAllMembersUpdated, Status: druidv1alpha1.ConditionTrue, LastTransitionTime: metav1.Now(), LastUpdateTime: metav1.Now()},
 	}
+	etcd.Status.Ready = ptr.To(true)
 	ExpectWithOffset(1, testClient.Status().Update(ctx, etcd)).To(Succeed())
 }
 

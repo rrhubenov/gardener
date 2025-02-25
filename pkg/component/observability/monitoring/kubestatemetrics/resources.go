@@ -32,6 +32,7 @@ import (
 	"github.com/gardener/gardener/pkg/component/observability/monitoring/prometheus/seed"
 	"github.com/gardener/gardener/pkg/component/observability/monitoring/prometheus/shoot"
 	monitoringutils "github.com/gardener/gardener/pkg/component/observability/monitoring/utils"
+	"github.com/gardener/gardener/pkg/resourcemanager/controller/garbagecollector/references"
 	"github.com/gardener/gardener/pkg/utils"
 	gardenerutils "github.com/gardener/gardener/pkg/utils/gardener"
 	kubernetesutils "github.com/gardener/gardener/pkg/utils/kubernetes"
@@ -297,6 +298,7 @@ func (k *kubeStateMetrics) deployment(
 		utilruntime.Must(gardenerutils.InjectGenericKubeconfig(deployment, genericTokenKubeconfigSecretName, shootAccessSecret.Secret.Name))
 	}
 
+	utilruntime.Must(references.InjectAnnotations(deployment))
 	return deployment
 }
 
@@ -334,11 +336,11 @@ func (k *kubeStateMetrics) podDisruptionBudget(deployment *appsv1.Deployment) *p
 	podDisruptionBudget := &policyv1.PodDisruptionBudget{ObjectMeta: metav1.ObjectMeta{Name: "kube-state-metrics-pdb" + k.values.NameSuffix, Namespace: k.namespace}}
 	podDisruptionBudget.Labels = k.getLabels()
 	podDisruptionBudget.Spec = policyv1.PodDisruptionBudgetSpec{
-		MaxUnavailable: ptr.To(intstr.FromInt32(1)),
-		Selector:       deployment.Spec.Selector,
+		MaxUnavailable:             ptr.To(intstr.FromInt32(1)),
+		Selector:                   deployment.Spec.Selector,
+		UnhealthyPodEvictionPolicy: ptr.To(policyv1.AlwaysAllow),
 	}
 
-	kubernetesutils.SetAlwaysAllowEviction(podDisruptionBudget, k.values.KubernetesVersion)
 	return podDisruptionBudget
 }
 
@@ -592,11 +594,18 @@ func (k *kubeStateMetrics) scrapeConfigGarden() *monitoringv1alpha1.ScrapeConfig
 				Replacement: ptr.To("kube-state-metrics"),
 			},
 		},
-		MetricRelabelConfigs: []monitoringv1.RelabelConfig{{
-			SourceLabels: []monitoringv1.LabelName{"pod"},
-			Regex:        `^.+\.tf-pod.+$`,
-			Action:       "drop",
-		}},
+		MetricRelabelConfigs: []monitoringv1.RelabelConfig{
+			{
+				SourceLabels: []monitoringv1.LabelName{"namespace"},
+				Regex:        `shoot-.+`,
+				Action:       "drop",
+			},
+			{
+				SourceLabels: []monitoringv1.LabelName{"pod"},
+				Regex:        `^.+\.tf-pod.+$`,
+				Action:       "drop",
+			},
+		},
 	}
 
 	return scrapeConfig

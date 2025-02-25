@@ -143,15 +143,20 @@ func (v *vpa) reconcileAdmissionControllerService(service *corev1.Service) {
 		metav1.SetMetaDataLabel(&service.ObjectMeta, label, value)
 	}
 	topologyAwareRoutingEnabled := v.values.AdmissionController.TopologyAwareRoutingEnabled && v.values.ClusterType == component.ClusterTypeShoot
-	gardenerutils.ReconcileTopologyAwareRoutingMetadata(service, topologyAwareRoutingEnabled, v.values.RuntimeKubernetesVersion)
+	gardenerutils.ReconcileTopologyAwareRoutingMetadata(service, topologyAwareRoutingEnabled)
 
 	switch v.values.ClusterType {
 	case component.ClusterTypeSeed:
 		metav1.SetMetaDataAnnotation(&service.ObjectMeta, resourcesv1alpha1.NetworkingFromWorldToPorts, fmt.Sprintf(`[{"protocol":"TCP","port":%d}]`, vpaconstants.AdmissionControllerPort))
-		utilruntime.Must(gardenerutils.InjectNetworkPolicyAnnotationsForSeedScrapeTargets(service, networkingv1.NetworkPolicyPort{
+		metricNetworkPolicyPort := networkingv1.NetworkPolicyPort{
 			Port:     ptr.To(intstr.FromInt32(admissionControllerMetricsPort)),
 			Protocol: ptr.To(corev1.ProtocolTCP),
-		}))
+		}
+		if v.values.IsGardenCluster {
+			utilruntime.Must(gardenerutils.InjectNetworkPolicyAnnotationsForGardenScrapeTargets(service, metricNetworkPolicyPort))
+		} else {
+			utilruntime.Must(gardenerutils.InjectNetworkPolicyAnnotationsForSeedScrapeTargets(service, metricNetworkPolicyPort))
+		}
 	case component.ClusterTypeShoot:
 		utilruntime.Must(gardenerutils.InjectNetworkPolicyAnnotationsForWebhookTargets(service, networkingv1.NetworkPolicyPort{
 			Port:     ptr.To(intstr.FromInt32(vpaconstants.AdmissionControllerPort)),
@@ -200,20 +205,8 @@ func (v *vpa) reconcileAdmissionControllerDeployment(deployment *appsv1.Deployme
 					Name:            "admission-controller",
 					Image:           v.values.AdmissionController.Image,
 					ImagePullPolicy: corev1.PullIfNotPresent,
-					Command:         v.computeAdmissionControllerCommands(),
-					Args: []string{
-						"--v=2",
-						"--stderrthreshold=info",
-						"--kube-api-qps=100",
-						"--kube-api-burst=120",
-						fmt.Sprintf("--client-ca-file=%s/%s", volumeMountPathCertificates, secretsutils.DataKeyCertificateBundle),
-						fmt.Sprintf("--tls-cert-file=%s/%s", volumeMountPathCertificates, secretsutils.DataKeyCertificate),
-						fmt.Sprintf("--tls-private-key=%s/%s", volumeMountPathCertificates, secretsutils.DataKeyPrivateKey),
-						"--address=:8944",
-						fmt.Sprintf("--port=%d", vpaconstants.AdmissionControllerPort),
-						"--register-webhook=false",
-					},
-					LivenessProbe: newDefaultLivenessProbe(),
+					Args:            v.computeAdmissionControllerArgs(),
+					LivenessProbe:   newDefaultLivenessProbe(),
 					Resources: corev1.ResourceRequirements{
 						Requests: corev1.ResourceList{
 							corev1.ResourceCPU:    resource.MustParse("10m"),
@@ -315,8 +308,19 @@ func (v *vpa) reconcileAdmissionControllerVPA(vpa *vpaautoscalingv1.VerticalPodA
 	}
 }
 
-func (v *vpa) computeAdmissionControllerCommands() []string {
-	out := []string{"./admission-controller"}
+func (v *vpa) computeAdmissionControllerArgs() []string {
+	out := []string{
+		"--v=2",
+		"--stderrthreshold=info",
+		"--kube-api-qps=100",
+		"--kube-api-burst=120",
+		fmt.Sprintf("--client-ca-file=%s/%s", volumeMountPathCertificates, secretsutils.DataKeyCertificateBundle),
+		fmt.Sprintf("--tls-cert-file=%s/%s", volumeMountPathCertificates, secretsutils.DataKeyCertificate),
+		fmt.Sprintf("--tls-private-key=%s/%s", volumeMountPathCertificates, secretsutils.DataKeyPrivateKey),
+		"--address=:8944",
+		fmt.Sprintf("--port=%d", vpaconstants.AdmissionControllerPort),
+		"--register-webhook=false",
+	}
 
 	if v.values.ClusterType == component.ClusterTypeShoot {
 		out = append(out, "--kubeconfig="+gardenerutils.PathGenericKubeconfig)

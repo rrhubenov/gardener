@@ -374,9 +374,6 @@ const (
 	// OperationRotateCredentialsComplete is a constant for an annotation indicating that the rotation of the
 	// credentials shall be completed.
 	OperationRotateCredentialsComplete = "rotate-credentials-complete" // #nosec G101 -- No credential.
-	// ShootOperationRotateKubeconfigCredentials is a constant for an annotation on a Shoot indicating that the
-	// credentialscontained in the kubeconfig that is handed out to the user shall be rotated.
-	ShootOperationRotateKubeconfigCredentials = "rotate-kubeconfig-credentials" // #nosec G101 -- No credential.
 	// ShootOperationRotateSSHKeypair is a constant for an annotation on a Shoot indicating that the SSH keypair for the
 	// shoot nodes shall be rotated.
 	ShootOperationRotateSSHKeypair = "rotate-ssh-keypair"
@@ -469,8 +466,8 @@ const (
 	LabelSecretBindingReference = "reference.gardener.cloud/secretbinding"
 	// LabelCredentialsBindingReference is used to identify credentials which are referred by a CredentialsBinding (not necessarily in the same namespace).
 	LabelCredentialsBindingReference = "reference.gardener.cloud/credentialsbinding"
-	// LabelPrefixSeedName is the prefix for the label key describing the name of a seed, e.g. seed.gardener.cloud/my-seed=true.
-	LabelPrefixSeedName = "seed.gardener.cloud/"
+	// LabelPrefixSeedName is the prefix for the label key describing the name of a seed, e.g. name.seed.gardener.cloud/my-seed=true.
+	LabelPrefixSeedName = "name.seed.gardener.cloud/"
 
 	// LabelExtensionExtensionTypePrefix is used to prefix extension label for extension types.
 	LabelExtensionExtensionTypePrefix = "extensions.extensions.gardener.cloud/"
@@ -668,6 +665,10 @@ const (
 	// trigger force-deletion of the cluster. It can only be set if the Shoot has a deletion timestamp and contains an ErrorCode in the Shoot Status.
 	AnnotationConfirmationForceDeletion = "confirmation.gardener.cloud/force-deletion"
 	// AnnotationManagedSeedAPIServer is a constant for an annotation on a Shoot resource containing the API server settings for a managed seed.
+	//
+	// Deprecated: The annotation is deprecated and will be removed in a future release.
+	// Instead, consider enabling high availability for the ManagedSeed's Shoot control plane.
+	// TODO(ialidzhikov): Remove the support for the annotation in v1.119.
 	AnnotationManagedSeedAPIServer = "shoot.gardener.cloud/managed-seed-api-server"
 	// AnnotationShootIgnoreAlerts is the key for an annotation of a Shoot cluster whose value indicates
 	// if alerts for this cluster should be ignored

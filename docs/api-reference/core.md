@@ -468,6 +468,21 @@ Bastion
 <p>Bastion contains the machine and image properties</p>
 </td>
 </tr>
+<tr>
+<td>
+<code>limits</code></br>
+<em>
+<a href="#core.gardener.cloud/v1beta1.Limits">
+Limits
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Limits configures operational limits for Shoot clusters using this CloudProfile.
+See <a href="https://github.com/gardener/gardener/blob/master/docs/usage/shoot/shoot_limits.md">https://github.com/gardener/gardener/blob/master/docs/usage/shoot/shoot_limits.md</a>.</p>
+</td>
+</tr>
 </table>
 </td>
 </tr>
@@ -1259,6 +1274,7 @@ string
 <em>(Optional)</em>
 <p>Namespace is the name of the namespace that has been created for the Project object.
 A nil value means that Gardener will determine the name of the namespace.
+If set, its value must be prefixed with <code>garden-</code>.
 This field is immutable.</p>
 </td>
 </tr>
@@ -3541,6 +3557,21 @@ Bastion
 <p>Bastion contains the machine and image properties</p>
 </td>
 </tr>
+<tr>
+<td>
+<code>limits</code></br>
+<em>
+<a href="#core.gardener.cloud/v1beta1.Limits">
+Limits
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Limits configures operational limits for Shoot clusters using this CloudProfile.
+See <a href="https://github.com/gardener/gardener/blob/master/docs/usage/shoot/shoot_limits.md">https://github.com/gardener/gardener/blob/master/docs/usage/shoot/shoot_limits.md</a>.</p>
+</td>
+</tr>
 </tbody>
 </table>
 <h3 id="core.gardener.cloud/v1beta1.ClusterAutoscaler">ClusterAutoscaler
@@ -5060,7 +5091,6 @@ triggered.</p>
 <td>
 <p>Resources contains the list of resources that shall be encrypted in addition to secrets.
 Each item is a Kubernetes resource name in plural (resource or resource.group) that should be encrypted.
-Note that configuring a custom resource is only supported for versions &gt;= 1.26.
 Wildcards are not supported for now.
 See <a href="https://github.com/gardener/gardener/blob/master/docs/usage/security/etcd_encryption_config.md">https://github.com/gardener/gardener/blob/master/docs/usage/security/etcd_encryption_config.md</a> for more details.</p>
 </td>
@@ -6261,7 +6291,7 @@ in favor of the kube-apiserver flags <code>--default-not-ready-toleration-second
 The <code>--pod-eviction-timeout</code> flag does not have effect when the taint based eviction is enabled. The taint
 based eviction is beta (enabled by default) since Kubernetes 1.13 and GA since Kubernetes 1.18. Hence,
 instead of setting this field, set the <code>spec.kubernetes.kubeAPIServer.defaultNotReadyTolerationSeconds</code> and
-<code>spec.kubernetes.kubeAPIServer.defaultUnreachableTolerationSeconds</code>.</p>
+<code>spec.kubernetes.kubeAPIServer.defaultUnreachableTolerationSeconds</code>. This field will be removed in gardener v1.120.</p>
 </td>
 </tr>
 <tr>
@@ -6715,9 +6745,7 @@ bool
 </td>
 <td>
 <em>(Optional)</em>
-<p>SeccompDefault enables the use of <code>RuntimeDefault</code> as the default seccomp profile for all workloads.
-This requires the corresponding SeccompDefault feature gate to be enabled as well.
-This field is only available for Kubernetes v1.25 or later.</p>
+<p>SeccompDefault enables the use of <code>RuntimeDefault</code> as the default seccomp profile for all workloads.</p>
 </td>
 </tr>
 <tr>
@@ -6757,7 +6785,7 @@ bool
 <td>
 <em>(Optional)</em>
 <p>ProtectKernelDefaults ensures that the kernel tunables are equal to the kubelet defaults.
-Defaults to true for Kubernetes v1.26 or later.</p>
+Defaults to true.</p>
 </td>
 </tr>
 <tr>
@@ -6773,9 +6801,7 @@ Kubernetes meta/v1.Duration
 <em>(Optional)</em>
 <p>StreamingConnectionIdleTimeout is the maximum time a streaming connection can be idle before the connection is automatically closed.
 This field cannot be set lower than &ldquo;30s&rdquo; or greater than &ldquo;4h&rdquo;.
-Default:
-&ldquo;4h&rdquo; for Kubernetes &lt; v1.26.
-&ldquo;5m&rdquo; for Kubernetes &gt;= v1.26.</p>
+Default: &ldquo;5m&rdquo;.</p>
 </td>
 </tr>
 <tr>
@@ -7265,8 +7291,8 @@ bool
 <td>
 <em>(Optional)</em>
 <p>EnableStaticTokenKubeconfig indicates whether static token kubeconfig secret will be created for the Shoot cluster.
-Defaults to true for Shoots with Kubernetes versions &lt; 1.26. Defaults to false for Shoots with Kubernetes versions &gt;= 1.26.
-Starting Kubernetes 1.27 the field will be locked to false.</p>
+Setting this field to true is not supported.</p>
+<p>Deprecated: This field is deprecated and will be removed in gardener v1.120</p>
 </td>
 </tr>
 </tbody>
@@ -7629,6 +7655,38 @@ LastOperationType
 <p>
 <p>LastOperationType is a string alias.</p>
 </p>
+<h3 id="core.gardener.cloud/v1beta1.Limits">Limits
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#core.gardener.cloud/v1beta1.CloudProfileSpec">CloudProfileSpec</a>)
+</p>
+<p>
+<p>Limits configures operational limits for Shoot clusters using this CloudProfile.
+See <a href="https://github.com/gardener/gardener/blob/master/docs/usage/shoot/shoot_limits.md">https://github.com/gardener/gardener/blob/master/docs/usage/shoot/shoot_limits.md</a>.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>maxNodesTotal</code></br>
+<em>
+int32
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>MaxNodesTotal configures the maximum node count a Shoot cluster can have during runtime.</p>
+</td>
+</tr>
+</tbody>
+</table>
 <h3 id="core.gardener.cloud/v1beta1.LoadBalancerServicesProxyProtocol">LoadBalancerServicesProxyProtocol
 </h3>
 <p>
@@ -9401,6 +9459,7 @@ string
 <em>(Optional)</em>
 <p>Namespace is the name of the namespace that has been created for the Project object.
 A nil value means that Gardener will determine the name of the namespace.
+If set, its value must be prefixed with <code>garden-</code>.
 This field is immutable.</p>
 </td>
 </tr>
@@ -11795,6 +11854,7 @@ ShootKubeconfigRotation
 <td>
 <em>(Optional)</em>
 <p>Kubeconfig contains information about the kubeconfig credential rotation.</p>
+<p>Deprecated: This field is deprecated and will be removed in gardener v1.120</p>
 </td>
 </tr>
 <tr>
@@ -12615,8 +12675,9 @@ string
 </em>
 </td>
 <td>
-<p>TechnicalID is the name that is used for creating the Seed namespace, the infrastructure resources, and
-basically everything that is related to this particular Shoot. This field is immutable.</p>
+<p>TechnicalID is a unique technical ID for this Shoot. It is used for the infrastructure resources, and
+basically everything that is related to this particular Shoot. For regular shoot clusters, this is also the name
+of the namespace in the seed cluster running the shoot&rsquo;s control plane. This field is immutable.</p>
 </td>
 </tr>
 <tr>
@@ -14077,8 +14138,32 @@ MachineUpdateStrategy
 <p>UpdateStrategy specifies the machine update strategy for the worker pool.</p>
 </td>
 </tr>
+<tr>
+<td>
+<code>controlPlane</code></br>
+<em>
+<a href="#core.gardener.cloud/v1beta1.WorkerControlPlane">
+WorkerControlPlane
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>ControlPlane specifies that the shoot cluster control plane components should be running in this worker pool.
+This is only relevant for autonomous shoot clusters.</p>
+</td>
+</tr>
 </tbody>
 </table>
+<h3 id="core.gardener.cloud/v1beta1.WorkerControlPlane">WorkerControlPlane
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#core.gardener.cloud/v1beta1.Worker">Worker</a>)
+</p>
+<p>
+<p>WorkerControlPlane specifies that the shoot cluster control plane components should be running in this worker pool.</p>
+</p>
 <h3 id="core.gardener.cloud/v1beta1.WorkerKubernetes">WorkerKubernetes
 </h3>
 <p>

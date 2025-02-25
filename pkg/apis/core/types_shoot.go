@@ -138,8 +138,9 @@ type ShootStatus struct {
 	// SeedName is the name of the seed cluster that runs the control plane of the Shoot. This value is only written
 	// after a successful create/reconcile operation. It will be used when control planes are moved between Seeds.
 	SeedName *string
-	// TechnicalID is the name that is used for creating the Seed namespace, the infrastructure resources, and
-	// basically everything that is related to this particular Shoot. This field is immutable.
+	// TechnicalID is a unique technical ID for this Shoot. It is used for the infrastructure resources, and
+	// basically everything that is related to this particular Shoot. For regular shoot clusters, this is also the name
+	// of the namespace in the seed cluster running the shoot's control plane. This field is immutable.
 	TechnicalID string
 	// UID is a unique identifier for the Shoot cluster to avoid portability between Kubernetes clusters.
 	// It is used to compute unique hashes. This field is immutable.
@@ -200,6 +201,8 @@ type ShootCredentialsRotation struct {
 	// CertificateAuthorities contains information about the certificate authority credential rotation.
 	CertificateAuthorities *CARotation
 	// Kubeconfig contains information about the kubeconfig credential rotation.
+	//
+	// Deprecated: This field is deprecated and will be removed in gardener v1.120
 	Kubeconfig *ShootKubeconfigRotation
 	// SSHKeypair contains information about the ssh-keypair credential rotation.
 	SSHKeypair *ShootSSHKeypairRotation
@@ -493,8 +496,9 @@ type Kubernetes struct {
 	// VerticalPodAutoscaler contains the configuration flags for the Kubernetes vertical pod autoscaler.
 	VerticalPodAutoscaler *VerticalPodAutoscaler
 	// EnableStaticTokenKubeconfig indicates whether static token kubeconfig secret will be created for the Shoot cluster.
-	// Defaults to true for Shoots with Kubernetes versions < 1.26. Defaults to false for Shoots with Kubernetes versions >= 1.26.
-	// Starting Kubernetes 1.27 the field will be locked to false.
+	// Setting this field to true is not supported.
+	//
+	// Deprecated: This field is deprecated and will be removed in gardener v1.120
 	EnableStaticTokenKubeconfig *bool
 }
 
@@ -703,7 +707,6 @@ type APIServerRequests struct {
 type EncryptionConfig struct {
 	// Resources contains the list of resources that shall be encrypted in addition to secrets.
 	// Each item is a Kubernetes resource name in plural (resource or resource.group) that should be encrypted.
-	// Note that configuring a custom resource is only supported for versions >= 1.26.
 	// Wildcards are not supported for now.
 	// See https://github.com/gardener/gardener/blob/master/docs/usage/security/etcd_encryption_config.md for more details.
 	Resources []string
@@ -856,7 +859,7 @@ type KubeControllerManagerConfig struct {
 	// The `--pod-eviction-timeout` flag does not have effect when the taint based eviction is enabled. The taint
 	// based eviction is beta (enabled by default) since Kubernetes 1.13 and GA since Kubernetes 1.18. Hence,
 	// instead of setting this field, set the `spec.kubernetes.kubeAPIServer.defaultNotReadyTolerationSeconds` and
-	// `spec.kubernetes.kubeAPIServer.defaultUnreachableTolerationSeconds`.
+	// `spec.kubernetes.kubeAPIServer.defaultUnreachableTolerationSeconds`. This field will be removed in gardener v1.120.
 	PodEvictionTimeout *metav1.Duration
 	// NodeMonitorGracePeriod defines the grace period before an unresponsive node is marked unhealthy.
 	NodeMonitorGracePeriod *metav1.Duration
@@ -1006,17 +1009,13 @@ type KubeletConfig struct {
 	// Only used if registryPullQPS is greater than 0.
 	RegistryBurst *int32
 	// SeccompDefault enables the use of `RuntimeDefault` as the default seccomp profile for all workloads.
-	// This requires the corresponding SeccompDefault feature gate to be enabled as well.
-	// This field is only available for Kubernetes v1.25 or later.
 	SeccompDefault *bool
 	// ProtectKernelDefaults ensures that the kernel tunables are equal to the kubelet defaults.
-	// Defaults to true for Kubernetes v1.26 or later.
+	// Defaults to true.
 	ProtectKernelDefaults *bool
 	// StreamingConnectionIdleTimeout is the maximum time a streaming connection can be idle before the connection is automatically closed.
 	// This field cannot be set lower than "30s" or greater than "4h".
-	// Default:
-	//  "4h" for Kubernetes < v1.26.
-	//  "5m" for Kubernetes >= v1.26.
+	// Default: "5m".
 	StreamingConnectionIdleTimeout *metav1.Duration
 	// MemorySwap configures swap memory available to container workloads.
 	MemorySwap *MemorySwapConfiguration
@@ -1247,7 +1246,13 @@ type Worker struct {
 	Priority *int32
 	// UpdateStrategy specifies the machine update strategy for the worker pool.
 	UpdateStrategy *MachineUpdateStrategy
+	// ControlPlane specifies that the shoot cluster control plane components should be running in this worker pool.
+	// This is only relevant for autonomous shoot clusters.
+	ControlPlane *WorkerControlPlane
 }
+
+// WorkerControlPlane specifies that the shoot cluster control plane components should be running in this worker pool.
+type WorkerControlPlane struct{}
 
 // MachineUpdateStrategy specifies the machine update strategy for the worker pool.
 type MachineUpdateStrategy string

@@ -53,10 +53,11 @@ var _ = Describe("ManagedSeed Tests", Label("ManagedSeed", "default"), func() {
 		GardenerConfig: e2e.DefaultGardenConfig("garden"),
 	})
 	f.Shoot = e2e.DefaultShoot(GetSeedName())
+	f.Shoot.Namespace = "garden"
 
 	It("Create Shoot, Create ManagedSeed, Delete ManagedSeed, Delete Shoot", func() {
 		By("Create Shoot")
-		ctx, cancel := context.WithTimeout(parentCtx, 15*time.Minute)
+		ctx, cancel := context.WithTimeout(parentCtx, 30*time.Minute)
 		defer cancel()
 
 		Expect(f.CreateShootAndWaitForCreation(ctx, false)).To(Succeed())

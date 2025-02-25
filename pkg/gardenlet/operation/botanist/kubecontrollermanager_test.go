@@ -60,10 +60,10 @@ var _ = Describe("KubeControllerManager", func() {
 			botanist.Logger = logr.Discard()
 			botanist.SeedClientSet = kubernetesClient
 			botanist.Seed = &seedpkg.Seed{
-				KubernetesVersion: semver.MustParse("1.25.0"),
+				KubernetesVersion: semver.MustParse("1.31.0"),
 			}
 			botanist.Shoot = &shootpkg.Shoot{
-				KubernetesVersion: semver.MustParse("1.25.0"),
+				KubernetesVersion: semver.MustParse("1.31.0"),
 				Networks:          &shootpkg.Networks{},
 			}
 			botanist.Shoot.SetInfo(&gardencorev1beta1.Shoot{})
@@ -94,7 +94,7 @@ var _ = Describe("KubeControllerManager", func() {
 						KubeControllerManager: kubeControllerManager,
 					},
 				},
-				SeedNamespace: namespace,
+				ControlPlaneNamespace: namespace,
 				Networks: &shootpkg.Networks{
 					Pods:     []net.IPNet{{IP: net.ParseIP("10.0.0.0"), Mask: net.CIDRMask(24, 32)}},
 					Services: []net.IPNet{{IP: net.ParseIP("10.0.1.0"), Mask: net.CIDRMask(24, 32)}},
@@ -310,7 +310,7 @@ var _ = Describe("KubeControllerManager", func() {
 		BeforeEach(func() {
 			botanist.SeedClientSet = kubernetesClient
 			botanist.Shoot = &shootpkg.Shoot{
-				SeedNamespace: namespace,
+				ControlPlaneNamespace: namespace,
 			}
 
 			kubernetesClient.EXPECT().Client().Return(c)

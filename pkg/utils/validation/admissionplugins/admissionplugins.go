@@ -39,7 +39,7 @@ var (
 		"CertificateApproval":                  {},
 		"CertificateSigning":                   {},
 		"CertificateSubjectRestriction":        {},
-		"ClusterTrustBundleAttest":             {VersionRange: versionutils.VersionRange{AddedInVersion: "1.27"}},
+		"ClusterTrustBundleAttest":             {},
 		"DefaultIngressClass":                  {},
 		"DefaultStorageClass":                  {},
 		"DefaultTolerationSeconds":             {},
@@ -49,6 +49,7 @@ var (
 		"ImagePolicyWebhook":                   {},
 		"LimitPodHardAntiAffinityTopology":     {},
 		"LimitRanger":                          {},
+		"MutatingAdmissionPolicy":              {VersionRange: versionutils.VersionRange{AddedInVersion: "1.32"}},
 		"MutatingAdmissionWebhook":             {Required: true},
 		"NamespaceAutoProvision":               {},
 		"NamespaceExists":                      {},
@@ -67,7 +68,7 @@ var (
 		"ServiceAccount":                       {},
 		"StorageObjectInUseProtection":         {Required: true},
 		"TaintNodesByCondition":                {},
-		"ValidatingAdmissionPolicy":            {VersionRange: versionutils.VersionRange{AddedInVersion: "1.26"}},
+		"ValidatingAdmissionPolicy":            {},
 		"ValidatingAdmissionWebhook":           {Required: true},
 	}
 

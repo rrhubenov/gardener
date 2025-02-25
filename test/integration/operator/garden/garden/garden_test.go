@@ -180,8 +180,8 @@ var _ = Describe("Garden controller tests", func() {
 				},
 				RuntimeCluster: operatorv1alpha1.RuntimeCluster{
 					Networking: operatorv1alpha1.RuntimeNetworking{
-						Pods:     "10.1.0.0/16",
-						Services: "10.2.0.0/16",
+						Pods:     []string{"10.1.0.0/16"},
+						Services: []string{"10.2.0.0/16"},
 					},
 					Ingress: operatorv1alpha1.Ingress{
 						Domains: []operatorv1alpha1.DNSDomain{{Name: "ingress.runtime-garden.local.gardener.cloud"}},
@@ -214,7 +214,7 @@ var _ = Describe("Garden controller tests", func() {
 						},
 					},
 					Kubernetes: operatorv1alpha1.Kubernetes{
-						Version: "1.26.3",
+						Version: "1.31.1",
 					},
 					Maintenance: operatorv1alpha1.Maintenance{
 						TimeWindow: gardencorev1beta1.MaintenanceTimeWindow{
@@ -223,7 +223,7 @@ var _ = Describe("Garden controller tests", func() {
 						},
 					},
 					Networking: operatorv1alpha1.Networking{
-						Services: "100.64.0.0/13",
+						Services: []string{"100.64.0.0/13"},
 					},
 				},
 			},
@@ -270,14 +270,19 @@ var _ = Describe("Garden controller tests", func() {
 		// trigger another reconciliation to enable the SeedAuthorizer feature. Since gardener-resource-manager does not
 		// run in this test to create them, let's create them manually here to prevent the controller from looping
 		// endlessly. We create them before the Garden resource to prevent that the test runs into a timeout.
+		// The gardener-system-public namespace is also expected to be created by gardener-resource-manager, we create
+		// the namespace to prevent controller failing to deploy the gardener-info configmap due to non-existing namespace.
 		By("Create gardener-{apiserver,admission-controller} deployments to prevent infinite reconciliation loops")
 		gardenerAPIServerDeployment := newDeployment("gardener-apiserver", testNamespace.Name)
 		gardenerAdmissionControllerDeployment := newDeployment("gardener-admission-controller", testNamespace.Name)
+		gardenerSystemPublicNamespace := corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "gardener-system-public"}}
 		Expect(testClient.Create(ctx, gardenerAPIServerDeployment)).To(Succeed())
 		Expect(testClient.Create(ctx, gardenerAdmissionControllerDeployment)).To(Succeed())
+		Expect(testClient.Create(ctx, &gardenerSystemPublicNamespace)).To(Succeed())
 		DeferCleanup(func() {
 			Expect(testClient.Delete(ctx, gardenerAPIServerDeployment)).To(Or(Succeed(), BeNotFoundError()))
 			Expect(testClient.Delete(ctx, gardenerAdmissionControllerDeployment)).To(Or(Succeed(), BeNotFoundError()))
+			Expect(testClient.Delete(ctx, &gardenerSystemPublicNamespace)).To(Or(Succeed(), BeNotFoundError()))
 		})
 
 		By("Create Extension", func() {
@@ -550,6 +555,7 @@ spec:
 
 				patch := client.MergeFrom(etcd.DeepCopy())
 				etcd.Status.ObservedGeneration = &etcd.Generation
+				etcd.Status.Conditions = []druidv1alpha1.Condition{{Type: druidv1alpha1.ConditionTypeAllMembersUpdated, Status: druidv1alpha1.ConditionTrue, LastUpdateTime: metav1.Now(), LastTransitionTime: metav1.Now()}}
 				etcd.Status.Ready = ptr.To(true)
 				g.Expect(testClient.Status().Patch(ctx, etcd, patch)).To(Succeed(), "for "+etcd.Name)
 			}
@@ -799,37 +805,30 @@ spec:
 			Expect(testClient.Delete(ctx, gardenerAPIServerService)).To(Or(Succeed(), BeNotFoundError()))
 		})
 
-		By("Verify that the ManagedResources related to Gardener control plane components have been deployed")
-		Eventually(func(g Gomega) []resourcesv1alpha1.ManagedResource {
-			managedResourceList := &resourcesv1alpha1.ManagedResourceList{}
-			g.Expect(testClient.List(ctx, managedResourceList, client.InNamespace(testNamespace.Name))).To(Succeed())
-			return managedResourceList.Items
-		}).Should(ContainElements(
-			MatchFields(IgnoreExtras, Fields{"ObjectMeta": MatchFields(IgnoreExtras, Fields{"Name": Equal("gardener-apiserver-runtime")})}),
-			MatchFields(IgnoreExtras, Fields{"ObjectMeta": MatchFields(IgnoreExtras, Fields{"Name": Equal("gardener-apiserver-virtual")})}),
-		))
-
-		// The garden controller waits for the Gardener-related ManagedResources to be healthy, but no
-		// gardener-resource-manager is running in this test, so let's fake this here.
-		By("Patch Gardener-related ManagedResources to report healthiness")
 		for _, name := range []string{"apiserver", "admission-controller", "controller-manager", "scheduler", "dashboard"} {
-			Eventually(makeManagedResourceHealthy("gardener-"+name+"-runtime", testNamespace.Name)).Should(Succeed())
-			Eventually(makeManagedResourceHealthy("gardener-"+name+"-virtual", testNamespace.Name)).Should(Succeed())
+			By("Verify that the ManagedResources related to gardener-" + name + " have been deployed")
+			Eventually(func(g Gomega) []resourcesv1alpha1.ManagedResource {
+				managedResourceList := &resourcesv1alpha1.ManagedResourceList{}
+				g.Expect(testClient.List(ctx, managedResourceList, client.InNamespace(testNamespace.Name))).To(Succeed())
+				return managedResourceList.Items
+			}).Should(ContainElements(
+				MatchFields(IgnoreExtras, Fields{"ObjectMeta": MatchFields(IgnoreExtras, Fields{"Name": Equal("gardener-" + name + "-runtime")})}),
+				MatchFields(IgnoreExtras, Fields{"ObjectMeta": MatchFields(IgnoreExtras, Fields{"Name": Equal("gardener-" + name + "-virtual")})}),
+			), "for gardener-"+name)
+
+			// The garden controller waits for the Gardener-related ManagedResources to be healthy, but no
+			// gardener-resource-manager is running in this test, so let's fake this here.
+			By("Patch gardener-" + name + "-related ManagedResources to report healthiness")
+			Eventually(makeManagedResourceHealthy("gardener-"+name+"-runtime", testNamespace.Name)).Should(Succeed(), "for gardener-"+name)
+			Eventually(makeManagedResourceHealthy("gardener-"+name+"-virtual", testNamespace.Name)).Should(Succeed(), "for gardener-"+name)
 		}
 
+		By("Verify that the ManagedResources related to other components have been deployed")
 		Eventually(func(g Gomega) []resourcesv1alpha1.ManagedResource {
 			managedResourceList := &resourcesv1alpha1.ManagedResourceList{}
 			g.Expect(testClient.List(ctx, managedResourceList, client.InNamespace(testNamespace.Name))).To(Succeed())
 			return managedResourceList.Items
 		}).Should(ContainElements(
-			MatchFields(IgnoreExtras, Fields{"ObjectMeta": MatchFields(IgnoreExtras, Fields{"Name": Equal("gardener-admission-controller-runtime")})}),
-			MatchFields(IgnoreExtras, Fields{"ObjectMeta": MatchFields(IgnoreExtras, Fields{"Name": Equal("gardener-admission-controller-virtual")})}),
-			MatchFields(IgnoreExtras, Fields{"ObjectMeta": MatchFields(IgnoreExtras, Fields{"Name": Equal("gardener-controller-manager-runtime")})}),
-			MatchFields(IgnoreExtras, Fields{"ObjectMeta": MatchFields(IgnoreExtras, Fields{"Name": Equal("gardener-controller-manager-virtual")})}),
-			MatchFields(IgnoreExtras, Fields{"ObjectMeta": MatchFields(IgnoreExtras, Fields{"Name": Equal("gardener-scheduler-runtime")})}),
-			MatchFields(IgnoreExtras, Fields{"ObjectMeta": MatchFields(IgnoreExtras, Fields{"Name": Equal("gardener-scheduler-virtual")})}),
-			MatchFields(IgnoreExtras, Fields{"ObjectMeta": MatchFields(IgnoreExtras, Fields{"Name": Equal("gardener-dashboard-runtime")})}),
-			MatchFields(IgnoreExtras, Fields{"ObjectMeta": MatchFields(IgnoreExtras, Fields{"Name": Equal("gardener-dashboard-virtual")})}),
 			MatchFields(IgnoreExtras, Fields{"ObjectMeta": MatchFields(IgnoreExtras, Fields{"Name": Equal("terminal-runtime")})}),
 			MatchFields(IgnoreExtras, Fields{"ObjectMeta": MatchFields(IgnoreExtras, Fields{"Name": Equal("terminal-virtual")})}),
 			MatchFields(IgnoreExtras, Fields{"ObjectMeta": MatchFields(IgnoreExtras, Fields{"Name": Equal("garden-system-virtual")})}),
@@ -959,6 +958,17 @@ spec:
 			g.Expect(testClient.List(ctx, secretList, client.InNamespace(testNamespace.Name), client.MatchingLabels{"managed-by": "secrets-manager", "manager-identity": "gardener-operator"})).To(Succeed())
 			return secretList.Items
 		}).Should(BeEmpty())
+
+		By("Verify that garbage-collectable resources have been deleted")
+		Eventually(func(g Gomega) {
+			secretList := &corev1.SecretList{}
+			g.Expect(testClient.List(ctx, secretList, client.InNamespace(testNamespace.Name), client.MatchingLabels{"resources.gardener.cloud/garbage-collectable-reference": "true"})).To(Succeed())
+			g.Expect(secretList.Items).To(BeEmpty())
+
+			configMapList := &corev1.ConfigMapList{}
+			g.Expect(testClient.List(ctx, configMapList, client.InNamespace(testNamespace.Name), client.MatchingLabels{"resources.gardener.cloud/garbage-collectable-reference": "true"})).To(Succeed())
+			g.Expect(configMapList.Items).To(BeEmpty())
+		}).Should(Succeed())
 
 		By("Ensure Garden is gone")
 		Eventually(func() error {

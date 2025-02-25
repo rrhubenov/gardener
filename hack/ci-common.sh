@@ -38,11 +38,9 @@ export_artifacts() {
       kubectl cp "$namespace/$node":/var/log "$node_dir" || true
     done < <(kubectl -n "$namespace" get po -l app=machine -oname | cut -d/ -f2)
   done < <(kubectl get ns -l gardener.cloud/role=shoot -oname | cut -d/ -f2)
-}
 
-export_events_for_kind() {
-  echo "> Exporting events of kind cluster '$1'"
-  export_events_for_cluster "$ARTIFACTS"
+  echo "> Exporting /etc/hosts"
+  cp /etc/hosts $ARTIFACTS/$cluster_name/hosts
 }
 
 export_resource_yamls_for() {
@@ -50,7 +48,8 @@ export_resource_yamls_for() {
   # Loop over the resource types
   for resource_type in "$@"; do
     echo "> Exporting Resource '$resource_type' yaml > $ARTIFACTS/$resource_type.yaml"
-    kubectl get "$resource_type" -A -o yaml >"$ARTIFACTS/$resource_type.yaml" || true
+    echo -e "---\n# cluster name: '${cluster_name:-}'" >> "$ARTIFACTS/$resource_type.yaml"
+    kubectl get "$resource_type" -A -o yaml >> "$ARTIFACTS/$resource_type.yaml" || true
   done
 }
 
@@ -94,7 +93,9 @@ clamp_mss_to_pmtu() {
 # If running in prow, we need to ensure that garden.local.gardener.cloud resolves to localhost
 ensure_glgc_resolves_to_localhost() {
   if [ -n "${CI:-}" -a -n "${ARTIFACTS:-}" ]; then
+    echo "> Adding garden.local.gardener.cloud to /etc/hosts..."
     printf "\n127.0.0.1 garden.local.gardener.cloud\n" >> /etc/hosts
     printf "\n::1 garden.local.gardener.cloud\n" >> /etc/hosts
+    echo "> Content of '/etc/hosts' after adding garden.local.gardener.cloud:\n$(cat /etc/hosts)"
   fi
 }

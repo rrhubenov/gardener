@@ -13,14 +13,6 @@ import (
 )
 
 var (
-	// ConstraintK8sGreaterEqual126 is a version constraint for versions >= 1.26.
-	ConstraintK8sGreaterEqual126 *semver.Constraints
-	// ConstraintK8sLess126 is a version constraint for versions < 1.26.
-	ConstraintK8sLess126 *semver.Constraints
-	// ConstraintK8sGreaterEqual127 is a version constraint for versions >= 1.27.
-	ConstraintK8sGreaterEqual127 *semver.Constraints
-	// ConstraintK8sLess127 is a version constraint for versions < 1.27.
-	ConstraintK8sLess127 *semver.Constraints
 	// ConstraintK8sGreaterEqual128 is a version constraint for versions >= 1.28.
 	ConstraintK8sGreaterEqual128 *semver.Constraints
 	// ConstraintK8sGreaterEqual129 is a version constraint for versions >= 1.29.
@@ -33,18 +25,14 @@ var (
 	ConstraintK8sLess131 *semver.Constraints
 	// ConstraintK8sGreaterEqual131 is a version constraint for versions >= 1.31.
 	ConstraintK8sGreaterEqual131 *semver.Constraints
+	// ConstraintK8sLess132 is a version constraint for versions < 1.32.
+	ConstraintK8sLess132 *semver.Constraints
+	// ConstraintK8sGreaterEqual132 is a version constraint for versions >= 1.32.
+	ConstraintK8sGreaterEqual132 *semver.Constraints
 )
 
 func init() {
 	var err error
-	ConstraintK8sGreaterEqual126, err = semver.NewConstraint(">= 1.26-0")
-	utilruntime.Must(err)
-	ConstraintK8sLess126, err = semver.NewConstraint("< 1.26-0")
-	utilruntime.Must(err)
-	ConstraintK8sGreaterEqual127, err = semver.NewConstraint(">= 1.27-0")
-	utilruntime.Must(err)
-	ConstraintK8sLess127, err = semver.NewConstraint("< 1.27-0")
-	utilruntime.Must(err)
 	ConstraintK8sGreaterEqual128, err = semver.NewConstraint(">= 1.28-0")
 	utilruntime.Must(err)
 	ConstraintK8sGreaterEqual129, err = semver.NewConstraint(">= 1.29-0")
@@ -56,6 +44,10 @@ func init() {
 	ConstraintK8sLess131, err = semver.NewConstraint("< 1.31-0")
 	utilruntime.Must(err)
 	ConstraintK8sGreaterEqual131, err = semver.NewConstraint(">= 1.31-0")
+	utilruntime.Must(err)
+	ConstraintK8sLess132, err = semver.NewConstraint("< 1.32-0")
+	utilruntime.Must(err)
+	ConstraintK8sGreaterEqual132, err = semver.NewConstraint(">= 1.32-0")
 	utilruntime.Must(err)
 }
 

@@ -44,9 +44,12 @@ spec:
     networking:
       # Those CIDRs have been chosen to match with the kind Cluster configuration (see example/gardener-local/kind/cluster/values.yaml).
       # Generally, they have to match the CIDRs of the runtime cluster.
-      nodes: 172.18.0.0/16
-      pods: 10.1.0.0/16
-      services: 10.2.0.0/16
+      nodes:
+      - 172.18.0.0/16
+      pods:
+      - 10.1.0.0/16
+      services:
+      - 10.2.0.0/16
     provider:
       region: local
       zones:
@@ -87,7 +90,7 @@ spec:
           capacity: 10Gi
         # className: default
     kubernetes:
-      version: 1.31.1
+      version: 1.32.0
     # kubeAPIServer:
     #   eventTTL: 1h
     #   featureGates:
@@ -165,7 +168,7 @@ spec:
     #   encryptionConfig: # See https://github.com/gardener/gardener/blob/master/docs/concepts/operator.md#etcd-encryption-config
     #     resources: # secrets are always encrypted
     #     - configmaps
-    #     - customresource.fancyoperator.io # requires Kubernetes version >= 1.26
+    #     - customresource.fancyoperator.io
     #   sni:
     #     secretName: name-of-secret-containing-tls-cert-and-key
     #     domainPatterns:
@@ -280,4 +283,5 @@ spec:
         begin: 220000+0100
         end: 230000+0100
     networking:
-      services: 100.64.0.0/13
+      services:
+      - 100.64.0.0/13

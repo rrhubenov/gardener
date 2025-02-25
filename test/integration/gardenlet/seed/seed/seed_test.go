@@ -635,6 +635,9 @@ var _ = Describe("Seed controller tests", func() {
 						DeferCleanup(func() {
 							Expect(applier.DeleteManifest(ctx, managedResourceCRDReader)).To(Succeed())
 							Expect(testClient.Delete(ctx, istioSystemNamespace)).To(Succeed())
+							Eventually(func() error {
+								return testClient.Get(ctx, client.ObjectKeyFromObject(istioSystemNamespace), istioSystemNamespace)
+							}).Should(BeNotFoundError())
 							Expect(istioCRDs.Destroy(ctx)).To(Succeed())
 							Expect(vpaCRD.Destroy(ctx)).To(Succeed())
 							Expect(fluentCRD.Destroy(ctx)).To(Succeed())
@@ -752,8 +755,8 @@ var _ = Describe("Seed controller tests", func() {
 							Spec: operatorv1alpha1.GardenSpec{
 								RuntimeCluster: operatorv1alpha1.RuntimeCluster{
 									Networking: operatorv1alpha1.RuntimeNetworking{
-										Pods:     "10.1.0.0/16",
-										Services: "10.2.0.0/16",
+										Pods:     []string{"10.1.0.0/16"},
+										Services: []string{"10.2.0.0/16"},
 									},
 									Ingress: operatorv1alpha1.Ingress{
 										Domains: []operatorv1alpha1.DNSDomain{{Name: "ingress.dev.seed.example.com"}},
@@ -770,7 +773,7 @@ var _ = Describe("Seed controller tests", func() {
 										ClusterIdentity: "test",
 									},
 									Kubernetes: operatorv1alpha1.Kubernetes{
-										Version: "1.26.3",
+										Version: "1.31.1",
 									},
 									Maintenance: operatorv1alpha1.Maintenance{
 										TimeWindow: gardencorev1beta1.MaintenanceTimeWindow{
@@ -779,7 +782,7 @@ var _ = Describe("Seed controller tests", func() {
 										},
 									},
 									Networking: operatorv1alpha1.Networking{
-										Services: "100.64.0.0/13",
+										Services: []string{"100.64.0.0/13"},
 									},
 								},
 							},

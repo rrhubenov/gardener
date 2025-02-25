@@ -55,8 +55,8 @@ var _ = Describe("Validation Tests", func() {
 							Domains: []operatorv1alpha1.DNSDomain{{Name: "ingress.bar.com", Provider: ptr.To("primary")}},
 						},
 						Networking: operatorv1alpha1.RuntimeNetworking{
-							Pods:     "10.1.0.0/16",
-							Services: "10.2.0.0/16",
+							Pods:     []string{"10.1.0.0/16"},
+							Services: []string{"10.2.0.0/16"},
 						},
 					},
 					VirtualCluster: operatorv1alpha1.VirtualCluster{
@@ -64,13 +64,13 @@ var _ = Describe("Validation Tests", func() {
 							Domains: []operatorv1alpha1.DNSDomain{{Name: "foo.bar.com", Provider: ptr.To("primary")}},
 						},
 						Kubernetes: operatorv1alpha1.Kubernetes{
-							Version: "1.26.3",
+							Version: "1.28.3",
 							KubeAPIServer: &operatorv1alpha1.KubeAPIServerConfig{
 								KubeAPIServerConfig: &gardencorev1beta1.KubeAPIServerConfig{},
 							},
 						},
 						Networking: operatorv1alpha1.Networking{
-							Services: "10.4.0.0/16",
+							Services: []string{"10.4.0.0/16"},
 						},
 					},
 				},
@@ -1037,30 +1037,50 @@ var _ = Describe("Validation Tests", func() {
 
 		Context("runtime cluster", func() {
 			Context("networking", func() {
+				It("should complain about invalid CIDRs", func() {
+					garden.Spec.RuntimeCluster.Networking.Nodes = []string{"not-parseable-cidr"}
+					garden.Spec.RuntimeCluster.Networking.Pods = []string{"not-parseable-cidr"}
+					garden.Spec.RuntimeCluster.Networking.Services = []string{"not-parseable-cidr"}
+
+					Expect(ValidateGarden(garden)).To(ContainElements(
+						PointTo(MatchFields(IgnoreExtras, Fields{
+							"Type":  Equal(field.ErrorTypeInvalid),
+							"Field": Equal("spec.runtimeCluster.networking.nodes[0]"),
+						})),
+						PointTo(MatchFields(IgnoreExtras, Fields{
+							"Type":  Equal(field.ErrorTypeInvalid),
+							"Field": Equal("spec.runtimeCluster.networking.pods[0]"),
+						})),
+						PointTo(MatchFields(IgnoreExtras, Fields{
+							"Type":  Equal(field.ErrorTypeInvalid),
+							"Field": Equal("spec.runtimeCluster.networking.services[0]"),
+						}))))
+				})
+
 				It("should complain when pod network of runtime cluster intersects with service network of runtime cluster", func() {
 					garden.Spec.RuntimeCluster.Networking.Pods = garden.Spec.RuntimeCluster.Networking.Services
 
 					Expect(ValidateGarden(garden)).To(ContainElement(PointTo(MatchFields(IgnoreExtras, Fields{
 						"Type":  Equal(field.ErrorTypeInvalid),
-						"Field": Equal("spec.runtimeCluster.networking.services"),
+						"Field": Equal("spec.runtimeCluster.networking.pods[0]"),
 					}))))
 				})
 
 				It("should complain when node network of runtime cluster intersects with pod network of runtime cluster", func() {
-					garden.Spec.RuntimeCluster.Networking.Nodes = &garden.Spec.RuntimeCluster.Networking.Pods
+					garden.Spec.RuntimeCluster.Networking.Nodes = garden.Spec.RuntimeCluster.Networking.Pods
 
 					Expect(ValidateGarden(garden)).To(ContainElement(PointTo(MatchFields(IgnoreExtras, Fields{
 						"Type":  Equal(field.ErrorTypeInvalid),
-						"Field": Equal("spec.runtimeCluster.networking.nodes"),
+						"Field": Equal("spec.runtimeCluster.networking.nodes[0]"),
 					}))))
 				})
 
 				It("should complain when node network of runtime cluster intersects with service network of runtime cluster", func() {
-					garden.Spec.RuntimeCluster.Networking.Nodes = &garden.Spec.RuntimeCluster.Networking.Services
+					garden.Spec.RuntimeCluster.Networking.Nodes = garden.Spec.RuntimeCluster.Networking.Services
 
 					Expect(ValidateGarden(garden)).To(ContainElement(PointTo(MatchFields(IgnoreExtras, Fields{
 						"Type":  Equal(field.ErrorTypeInvalid),
-						"Field": Equal("spec.runtimeCluster.networking.nodes"),
+						"Field": Equal("spec.runtimeCluster.networking.nodes[0]"),
 					}))))
 				})
 			})
@@ -1267,11 +1287,11 @@ var _ = Describe("Validation Tests", func() {
 
 			Context("Networking", func() {
 				It("should complain about an invalid service CIDR", func() {
-					garden.Spec.VirtualCluster.Networking.Services = "not-parseable-cidr"
+					garden.Spec.VirtualCluster.Networking.Services = []string{"not-parseable-cidr"}
 
 					Expect(ValidateGarden(garden)).To(ContainElement(PointTo(MatchFields(IgnoreExtras, Fields{
 						"Type":  Equal(field.ErrorTypeInvalid),
-						"Field": Equal("spec.virtualCluster.networking.services"),
+						"Field": Equal("spec.virtualCluster.networking.services[0]"),
 					}))))
 				})
 
@@ -1280,7 +1300,7 @@ var _ = Describe("Validation Tests", func() {
 
 					Expect(ValidateGarden(garden)).To(ContainElement(PointTo(MatchFields(IgnoreExtras, Fields{
 						"Type":  Equal(field.ErrorTypeInvalid),
-						"Field": Equal("spec.virtualCluster.networking.services"),
+						"Field": Equal("spec.virtualCluster.networking.services[0]"),
 					}))))
 				})
 
@@ -1289,17 +1309,41 @@ var _ = Describe("Validation Tests", func() {
 
 					Expect(ValidateGarden(garden)).To(ContainElement(PointTo(MatchFields(IgnoreExtras, Fields{
 						"Type":  Equal(field.ErrorTypeInvalid),
-						"Field": Equal("spec.virtualCluster.networking.services"),
+						"Field": Equal("spec.virtualCluster.networking.services[0]"),
 					}))))
 				})
 
 				It("should complain when node network of runtime cluster intersects with service network of virtual cluster", func() {
-					garden.Spec.RuntimeCluster.Networking.Nodes = &garden.Spec.VirtualCluster.Networking.Services
+					garden.Spec.RuntimeCluster.Networking.Nodes = garden.Spec.VirtualCluster.Networking.Services
 
 					Expect(ValidateGarden(garden)).To(ContainElement(PointTo(MatchFields(IgnoreExtras, Fields{
 						"Type":  Equal(field.ErrorTypeInvalid),
+						"Field": Equal("spec.virtualCluster.networking.services[0]"),
+					}))))
+				})
+
+				It("should complain when service network of virtual cluster has too many entries", func() {
+					garden.Spec.VirtualCluster.Networking.Services = []string{"10.4.0.0/16", "10.5.0.0/16", "10.6.0.0/16"}
+
+					Expect(ValidateGarden(garden)).To(ContainElement(PointTo(MatchFields(IgnoreExtras, Fields{
+						"Type":  Equal(field.ErrorTypeForbidden),
 						"Field": Equal("spec.virtualCluster.networking.services"),
 					}))))
+				})
+
+				It("should complain when service network of virtual cluster has equal IP family", func() {
+					garden.Spec.VirtualCluster.Networking.Services = []string{"10.4.0.0/16", "10.5.0.0/16"}
+
+					Expect(ValidateGarden(garden)).To(ContainElement(PointTo(MatchFields(IgnoreExtras, Fields{
+						"Type":  Equal(field.ErrorTypeForbidden),
+						"Field": Equal("spec.virtualCluster.networking.services"),
+					}))))
+				})
+
+				It("should succeed when service network of virtual cluster has different IP families", func() {
+					garden.Spec.VirtualCluster.Networking.Services = []string{"10.4.0.0/16", "2001:db8::/32"}
+
+					Expect(ValidateGarden(garden)).To(BeEmpty())
 				})
 			})
 
@@ -1974,27 +2018,27 @@ var _ = Describe("Validation Tests", func() {
 
 					Context("OIDC config", func() {
 						It("should complain when OIDC config is configured while it is unset in kube-apiserver config", func() {
-							garden.Spec.VirtualCluster.Gardener.Dashboard = &operatorv1alpha1.GardenerDashboardConfig{OIDC: &operatorv1alpha1.DashboardOIDC{}}
+							garden.Spec.VirtualCluster.Gardener.Dashboard = &operatorv1alpha1.GardenerDashboardConfig{OIDCConfig: &operatorv1alpha1.DashboardOIDC{}}
 
 							Expect(ValidateGarden(garden)).To(ContainElement(PointTo(MatchFields(IgnoreExtras, Fields{
 								"Type":  Equal(field.ErrorTypeInvalid),
-								"Field": Equal("spec.virtualCluster.gardener.gardenerDashboard.oidc"),
+								"Field": Equal("spec.virtualCluster.gardener.gardenerDashboard.oidcConfig"),
 							}))))
 						})
 
 						It("should complain when clientID is missing in OIDC config", func() {
-							garden.Spec.VirtualCluster.Gardener.Dashboard = &operatorv1alpha1.GardenerDashboardConfig{OIDC: &operatorv1alpha1.DashboardOIDC{
+							garden.Spec.VirtualCluster.Gardener.Dashboard = &operatorv1alpha1.GardenerDashboardConfig{OIDCConfig: &operatorv1alpha1.DashboardOIDC{
 								IssuerURL: ptr.To("https://example.com"),
 							}}
 
 							Expect(ValidateGarden(garden)).To(ContainElement(PointTo(MatchFields(IgnoreExtras, Fields{
 								"Type":  Equal(field.ErrorTypeRequired),
-								"Field": Equal("spec.virtualCluster.gardener.gardenerDashboard.oidc.clientIDPublic"),
+								"Field": Equal("spec.virtualCluster.gardener.gardenerDashboard.oidcConfig.clientIDPublic"),
 							}))))
 						})
 
 						It("should complain when clientID is missing in OIDC config but given in kube-apiserver config", func() {
-							garden.Spec.VirtualCluster.Gardener.Dashboard = &operatorv1alpha1.GardenerDashboardConfig{OIDC: &operatorv1alpha1.DashboardOIDC{
+							garden.Spec.VirtualCluster.Gardener.Dashboard = &operatorv1alpha1.GardenerDashboardConfig{OIDCConfig: &operatorv1alpha1.DashboardOIDC{
 								IssuerURL: ptr.To("https://example.com"),
 							}}
 							garden.Spec.VirtualCluster.Kubernetes.KubeAPIServer = &operatorv1alpha1.KubeAPIServerConfig{KubeAPIServerConfig: &gardencorev1beta1.KubeAPIServerConfig{OIDCConfig: &gardencorev1beta1.OIDCConfig{
@@ -2003,23 +2047,23 @@ var _ = Describe("Validation Tests", func() {
 
 							Expect(ValidateGarden(garden)).To(ContainElement(PointTo(MatchFields(IgnoreExtras, Fields{
 								"Type":  Equal(field.ErrorTypeRequired),
-								"Field": Equal("spec.virtualCluster.gardener.gardenerDashboard.oidc.clientIDPublic"),
+								"Field": Equal("spec.virtualCluster.gardener.gardenerDashboard.oidcConfig.clientIDPublic"),
 							}))))
 						})
 
 						It("should complain when issuerURL is missing in OIDC config", func() {
-							garden.Spec.VirtualCluster.Gardener.Dashboard = &operatorv1alpha1.GardenerDashboardConfig{OIDC: &operatorv1alpha1.DashboardOIDC{
+							garden.Spec.VirtualCluster.Gardener.Dashboard = &operatorv1alpha1.GardenerDashboardConfig{OIDCConfig: &operatorv1alpha1.DashboardOIDC{
 								ClientIDPublic: ptr.To("my-client-id"),
 							}}
 
 							Expect(ValidateGarden(garden)).To(ContainElement(PointTo(MatchFields(IgnoreExtras, Fields{
 								"Type":  Equal(field.ErrorTypeRequired),
-								"Field": Equal("spec.virtualCluster.gardener.gardenerDashboard.oidc.issuerURL"),
+								"Field": Equal("spec.virtualCluster.gardener.gardenerDashboard.oidcConfig.issuerURL"),
 							}))))
 						})
 
 						It("should complain when issuerURL is missing in OIDC config but given in kube-apiserver config", func() {
-							garden.Spec.VirtualCluster.Gardener.Dashboard = &operatorv1alpha1.GardenerDashboardConfig{OIDC: &operatorv1alpha1.DashboardOIDC{
+							garden.Spec.VirtualCluster.Gardener.Dashboard = &operatorv1alpha1.GardenerDashboardConfig{OIDCConfig: &operatorv1alpha1.DashboardOIDC{
 								ClientIDPublic: ptr.To("my-client-id"),
 							}}
 							garden.Spec.VirtualCluster.Kubernetes.KubeAPIServer = &operatorv1alpha1.KubeAPIServerConfig{KubeAPIServerConfig: &gardencorev1beta1.KubeAPIServerConfig{OIDCConfig: &gardencorev1beta1.OIDCConfig{
@@ -2028,13 +2072,13 @@ var _ = Describe("Validation Tests", func() {
 
 							Expect(ValidateGarden(garden)).To(ContainElement(PointTo(MatchFields(IgnoreExtras, Fields{
 								"Type":  Equal(field.ErrorTypeRequired),
-								"Field": Equal("spec.virtualCluster.gardener.gardenerDashboard.oidc.issuerURL"),
+								"Field": Equal("spec.virtualCluster.gardener.gardenerDashboard.oidcConfig.issuerURL"),
 							}))))
 						})
 
 						It("should not complain when OIDC config is configured in both gardener-dashboard and kube-apiserver via structured authentication", func() {
 							garden.Spec.VirtualCluster.Kubernetes.Version = "1.30.0"
-							garden.Spec.VirtualCluster.Gardener.Dashboard = &operatorv1alpha1.GardenerDashboardConfig{OIDC: &operatorv1alpha1.DashboardOIDC{
+							garden.Spec.VirtualCluster.Gardener.Dashboard = &operatorv1alpha1.GardenerDashboardConfig{OIDCConfig: &operatorv1alpha1.DashboardOIDC{
 								IssuerURL:      ptr.To("https://example.com"),
 								ClientIDPublic: ptr.To("my-client-id"),
 							}}
@@ -2046,7 +2090,7 @@ var _ = Describe("Validation Tests", func() {
 						})
 
 						It("should not complain when OIDC config is configured in both gardener-dashboard and kube-apiserver via OIDC config", func() {
-							garden.Spec.VirtualCluster.Gardener.Dashboard = &operatorv1alpha1.GardenerDashboardConfig{OIDC: &operatorv1alpha1.DashboardOIDC{
+							garden.Spec.VirtualCluster.Gardener.Dashboard = &operatorv1alpha1.GardenerDashboardConfig{OIDCConfig: &operatorv1alpha1.DashboardOIDC{
 								IssuerURL:      ptr.To("https://example.com"),
 								ClientIDPublic: ptr.To("my-client-id"),
 							}}
@@ -2056,7 +2100,7 @@ var _ = Describe("Validation Tests", func() {
 						})
 
 						It("should not complain when OIDC config is configured in both gardener-dashboard and kube-apiserver via OIDC config IssuerURL and ClientID", func() {
-							garden.Spec.VirtualCluster.Gardener.Dashboard = &operatorv1alpha1.GardenerDashboardConfig{OIDC: &operatorv1alpha1.DashboardOIDC{}}
+							garden.Spec.VirtualCluster.Gardener.Dashboard = &operatorv1alpha1.GardenerDashboardConfig{OIDCConfig: &operatorv1alpha1.DashboardOIDC{}}
 							garden.Spec.VirtualCluster.Kubernetes.KubeAPIServer = &operatorv1alpha1.KubeAPIServerConfig{KubeAPIServerConfig: &gardencorev1beta1.KubeAPIServerConfig{OIDCConfig: &gardencorev1beta1.OIDCConfig{
 								IssuerURL: ptr.To("https://example.com"),
 								ClientID:  ptr.To("my-client-id"),
@@ -2084,8 +2128,8 @@ var _ = Describe("Validation Tests", func() {
 							Domains: []operatorv1alpha1.DNSDomain{{Name: "ingress.bar.com"}},
 						},
 						Networking: operatorv1alpha1.RuntimeNetworking{
-							Pods:     "10.1.0.0/16",
-							Services: "10.2.0.0/16",
+							Pods:     []string{"10.1.0.0/16"},
+							Services: []string{"10.2.0.0/16"},
 						},
 					},
 					VirtualCluster: operatorv1alpha1.VirtualCluster{
@@ -2098,7 +2142,7 @@ var _ = Describe("Validation Tests", func() {
 							},
 						},
 						Networking: operatorv1alpha1.Networking{
-							Services: "10.4.0.0/16",
+							Services: []string{"10.4.0.0/16"},
 						},
 					},
 				},
@@ -2108,6 +2152,60 @@ var _ = Describe("Validation Tests", func() {
 		})
 
 		Context("runtime cluster", func() {
+			Context("networking", func() {
+				It("should allow adding network ranges", func() {
+					newGarden.Spec.RuntimeCluster.Networking.Nodes = append(newGarden.Spec.RuntimeCluster.Networking.Nodes, "fd00:1::/64", "fd00:2::/64")
+					newGarden.Spec.RuntimeCluster.Networking.Pods = append(newGarden.Spec.RuntimeCluster.Networking.Pods, "fd00:3::/64", "fd00:4::/64")
+					newGarden.Spec.RuntimeCluster.Networking.Services = append(newGarden.Spec.RuntimeCluster.Networking.Services, "fd00:5::/64", "fd00:6::/64")
+
+					Expect(ValidateGardenUpdate(oldGarden, newGarden)).To(BeEmpty())
+				})
+
+				It("should deny removing network ranges", func() {
+					oldGarden.Spec.RuntimeCluster.Networking.Nodes = append(oldGarden.Spec.RuntimeCluster.Networking.Nodes, "fd00:1::/64", "fd00:2::/64")
+					oldGarden.Spec.RuntimeCluster.Networking.Pods = append(oldGarden.Spec.RuntimeCluster.Networking.Pods, "fd00:3::/64", "fd00:4::/64")
+					oldGarden.Spec.RuntimeCluster.Networking.Services = append(oldGarden.Spec.RuntimeCluster.Networking.Services, "fd00:5::/64", "fd00:6::/64")
+
+					Expect(ValidateGardenUpdate(oldGarden, newGarden)).To(ContainElements(
+						PointTo(MatchFields(IgnoreExtras, Fields{
+							"Type":  Equal(field.ErrorTypeForbidden),
+							"Field": Equal("spec.runtimeCluster.networking.nodes"),
+						})),
+						PointTo(MatchFields(IgnoreExtras, Fields{
+							"Type":  Equal(field.ErrorTypeForbidden),
+							"Field": Equal("spec.runtimeCluster.networking.pods"),
+						})),
+						PointTo(MatchFields(IgnoreExtras, Fields{
+							"Type":  Equal(field.ErrorTypeForbidden),
+							"Field": Equal("spec.runtimeCluster.networking.services"),
+						}))))
+				})
+
+				It("should deny changing network ranges", func() {
+					oldGarden.Spec.RuntimeCluster.Networking.Nodes = append(oldGarden.Spec.RuntimeCluster.Networking.Nodes, "fd00:1::/64", "fd00:2::/64")
+					newGarden.Spec.RuntimeCluster.Networking.Nodes = append(newGarden.Spec.RuntimeCluster.Networking.Nodes, "fd00:1::/64", "fd00:2::/64")
+					newGarden.Spec.RuntimeCluster.Networking.Nodes[0] = "fd00:3::/64"
+					oldGarden.Spec.RuntimeCluster.Networking.Pods = append(oldGarden.Spec.RuntimeCluster.Networking.Pods, "fd00:4::/64", "fd00:5::/64")
+					newGarden.Spec.RuntimeCluster.Networking.Pods = append(newGarden.Spec.RuntimeCluster.Networking.Pods, "fd00:4::/64", "fd00:5::/64")
+					newGarden.Spec.RuntimeCluster.Networking.Pods[1] = "fd00:6::/64"
+					oldGarden.Spec.RuntimeCluster.Networking.Services = append(oldGarden.Spec.RuntimeCluster.Networking.Services, "fd00:7::/64", "fd00:8::/64")
+					newGarden.Spec.RuntimeCluster.Networking.Services = append(newGarden.Spec.RuntimeCluster.Networking.Services, "fd00:7::/64", "fd00:8::/64")
+					newGarden.Spec.RuntimeCluster.Networking.Services[2] = "fd00:9::/64"
+
+					Expect(ValidateGardenUpdate(oldGarden, newGarden)).To(ContainElements(
+						PointTo(MatchFields(IgnoreExtras, Fields{
+							"Type":  Equal(field.ErrorTypeInvalid),
+							"Field": Equal("spec.runtimeCluster.networking.nodes[0]"),
+						})), PointTo(MatchFields(IgnoreExtras, Fields{
+							"Type":  Equal(field.ErrorTypeInvalid),
+							"Field": Equal("spec.runtimeCluster.networking.pods[1]"),
+						})), PointTo(MatchFields(IgnoreExtras, Fields{
+							"Type":  Equal(field.ErrorTypeInvalid),
+							"Field": Equal("spec.runtimeCluster.networking.services[2]"),
+						}))))
+				})
+			})
+
 			Context("ingress", func() {
 				It("should allow update if nothing changes", func() {
 					oldGarden.Spec.RuntimeCluster.Ingress.Domains = []operatorv1alpha1.DNSDomain{{Name: "example.com"}}
@@ -2319,6 +2417,34 @@ var _ = Describe("Validation Tests", func() {
 					Expect(ValidateGardenUpdate(oldGarden, newGarden)).To(ContainElement(PointTo(MatchFields(IgnoreExtras, Fields{
 						"Type":  Equal(field.ErrorTypeForbidden),
 						"Field": Equal("spec.virtualCluster.etcd.main.backup"),
+					}))))
+				})
+			})
+
+			Context("networking", func() {
+				It("should allow adding service range", func() {
+					newGarden.Spec.VirtualCluster.Networking.Services = append(newGarden.Spec.VirtualCluster.Networking.Services, "fd00:1::/64")
+
+					Expect(ValidateGardenUpdate(oldGarden, newGarden)).To(BeEmpty())
+				})
+
+				It("should deny removing service ranges", func() {
+					oldGarden.Spec.VirtualCluster.Networking.Services = append(oldGarden.Spec.VirtualCluster.Networking.Services, "fd00:1::/64")
+
+					Expect(ValidateGardenUpdate(oldGarden, newGarden)).To(ContainElement(PointTo(MatchFields(IgnoreExtras, Fields{
+						"Type":  Equal(field.ErrorTypeForbidden),
+						"Field": Equal("spec.virtualCluster.networking.services"),
+					}))))
+				})
+
+				It("should deny changing service ranges", func() {
+					oldGarden.Spec.VirtualCluster.Networking.Services = append(oldGarden.Spec.VirtualCluster.Networking.Services, "fd00:1::/64", "fd00:2::/64")
+					newGarden.Spec.VirtualCluster.Networking.Services = append(newGarden.Spec.VirtualCluster.Networking.Services, "fd00:1::/64", "fd00:2::/64")
+					newGarden.Spec.VirtualCluster.Networking.Services[1] = "fd00:3::/64"
+
+					Expect(ValidateGardenUpdate(oldGarden, newGarden)).To(ContainElement(PointTo(MatchFields(IgnoreExtras, Fields{
+						"Type":  Equal(field.ErrorTypeInvalid),
+						"Field": Equal("spec.virtualCluster.networking.services[1]"),
 					}))))
 				})
 			})

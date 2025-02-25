@@ -61,7 +61,7 @@ var _ = Describe("KubeAPIServerExposure", func() {
 			Operation: &operation.Operation{
 				SeedClientSet: fakeClientSet,
 				Shoot: &shoot.Shoot{
-					SeedNamespace: namespace,
+					ControlPlaneNamespace: namespace,
 				},
 				Garden: &garden.Garden{},
 				Logger: logr.Discard(),
@@ -89,7 +89,7 @@ var _ = Describe("KubeAPIServerExposure", func() {
 				ControlPlane: &shoot.ControlPlane{},
 			}
 
-			kubernetesVersion := "1.26.0"
+			kubernetesVersion := "1.31.1"
 			botanist.Seed = &seed.Seed{}
 			botanist.Seed.SetInfo(&gardencorev1beta1.Seed{
 				Status: gardencorev1beta1.SeedStatus{

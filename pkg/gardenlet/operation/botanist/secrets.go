@@ -75,20 +75,9 @@ func (b *Botanist) lastSecretRotationStartTimes() map[string]time.Time {
 			for _, config := range caCertConfigurations(b.Shoot.IsWorkerless) {
 				rotation[config.GetName()] = shootStatus.Credentials.Rotation.CertificateAuthorities.LastInitiationTime.Time
 			}
-		}
-
-		// When the static token kubeconfig is disabled, there will not be any kubeconfig rotation anymore. However, the
-		// static token secret does not only contain the token for the user kubeconfig but also a token for the health
-		// check of the kube-apiserver. This token must still be rotated even when the user kubeconfig is disabled.
-		// Hence, let's use the last rotation initiation time of the CA rotation also to rotate the static token secret.
-		if !ptr.Deref(b.Shoot.GetInfo().Spec.Kubernetes.EnableStaticTokenKubeconfig, false) {
-			if shootStatus.Credentials.Rotation.CertificateAuthorities != nil && shootStatus.Credentials.Rotation.CertificateAuthorities.LastInitiationTime != nil {
-				rotation[kubeapiserver.SecretStaticTokenName] = shootStatus.Credentials.Rotation.CertificateAuthorities.LastInitiationTime.Time
-			}
-		} else {
-			if shootStatus.Credentials.Rotation.Kubeconfig != nil && shootStatus.Credentials.Rotation.Kubeconfig.LastInitiationTime != nil {
-				rotation[kubeapiserver.SecretStaticTokenName] = shootStatus.Credentials.Rotation.Kubeconfig.LastInitiationTime.Time
-			}
+			// The static token secret contains token for the health check of the kube-apiserver.
+			// Hence, let's use the last rotation initiation time of the CA rotation also to rotate the static token secret.
+			rotation[kubeapiserver.SecretStaticTokenName] = shootStatus.Credentials.Rotation.CertificateAuthorities.LastInitiationTime.Time
 		}
 
 		if shootStatus.Credentials.Rotation.SSHKeypair != nil && shootStatus.Credentials.Rotation.SSHKeypair.LastInitiationTime != nil {
@@ -125,7 +114,7 @@ func (b *Botanist) restoreSecretsFromShootStateForSecretsManagerAdoption(ctx con
 		fns = append(fns, func(ctx context.Context) error {
 			objectMeta := metav1.ObjectMeta{
 				Name:      entry.Name,
-				Namespace: b.Shoot.SeedNamespace,
+				Namespace: b.Shoot.ControlPlaneNamespace,
 				Labels:    entry.Labels,
 			}
 
@@ -252,12 +241,12 @@ func (b *Botanist) generateCertificateAuthorities(ctx context.Context) error {
 }
 
 func (b *Botanist) generateGenericTokenKubeconfig(ctx context.Context) error {
-	genericTokenKubeconfigSecret, err := tokenrequest.GenerateGenericTokenKubeconfig(ctx, b.SecretsManager, b.Shoot.SeedNamespace, b.Shoot.ComputeInClusterAPIServerAddress(true))
+	genericTokenKubeconfigSecret, err := tokenrequest.GenerateGenericTokenKubeconfig(ctx, b.SecretsManager, b.Shoot.ControlPlaneNamespace, b.Shoot.ComputeInClusterAPIServerAddress(true))
 	if err != nil {
 		return err
 	}
 
-	cluster := &extensionsv1alpha1.Cluster{ObjectMeta: metav1.ObjectMeta{Name: b.Shoot.SeedNamespace}}
+	cluster := &extensionsv1alpha1.Cluster{ObjectMeta: metav1.ObjectMeta{Name: b.Shoot.ControlPlaneNamespace}}
 	_, err = controllerutils.GetAndCreateOrMergePatch(ctx, b.SeedClientSet.Client(), cluster, func() error {
 		metav1.SetMetaDataAnnotation(&cluster.ObjectMeta, v1beta1constants.AnnotationKeyGenericTokenKubeconfigSecretName, genericTokenKubeconfigSecret.Name)
 		return nil
@@ -458,7 +447,7 @@ func (b *Botanist) reconcileWildcardIngressCertificate(ctx context.Context) erro
 	certSecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      wildcardCert.GetName(),
-			Namespace: b.Shoot.SeedNamespace,
+			Namespace: b.Shoot.ControlPlaneNamespace,
 		},
 	}
 
@@ -489,7 +478,7 @@ func (b *Botanist) DeployCloudProviderSecret(ctx context.Context) error {
 
 		secret, err := workloadidentity.NewSecret(
 			v1beta1constants.SecretNameCloudProvider,
-			b.Shoot.SeedNamespace,
+			b.Shoot.ControlPlaneNamespace,
 			workloadidentity.For(credentials.Name, credentials.Namespace, credentials.Spec.TargetSystem.Type),
 			workloadidentity.WithProviderConfig(credentials.Spec.TargetSystem.ProviderConfig),
 			workloadidentity.WithContextObject(shootMeta),
@@ -503,7 +492,7 @@ func (b *Botanist) DeployCloudProviderSecret(ctx context.Context) error {
 		secret := &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      v1beta1constants.SecretNameCloudProvider,
-				Namespace: b.Shoot.SeedNamespace,
+				Namespace: b.Shoot.ControlPlaneNamespace,
 			},
 		}
 		_, err := controllerutils.GetAndCreateOrMergePatch(ctx, b.SeedClientSet.Client(), secret, func() error {

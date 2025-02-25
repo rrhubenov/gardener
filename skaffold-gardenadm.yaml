@@ -11,6 +11,7 @@ build:
             - cmd/gardenadm
             - cmd/gardenadm/app
             - cmd/utils
+            - pkg/gardenadm/cmd
             - pkg/gardenadm/cmd/bootstrap
             - pkg/gardenadm/cmd/connect
             - pkg/gardenadm/cmd/discover
@@ -22,6 +23,7 @@ build:
             - pkg/gardenadm/cmd/token/generate
             - pkg/gardenadm/cmd/token/list
             - pkg/gardenadm/cmd/version
+            - pkg/logger
             - VERSION
         ldflags:
           - '{{.LD_FLAGS}}'
@@ -261,11 +263,6 @@ build:
         ldflags:
           - '{{.LD_FLAGS}}'
         main: ./cmd/machine-controller-manager-provider-local
-      hooks:
-        after:
-          - command:
-              - bash
-              - hack/generate-kustomize-patch-controllerdeployment-provider-local.sh
     - image: local-skaffold/gardener-extension-provider-local/charts/extension
       custom:
         buildCommand: |
@@ -303,6 +300,7 @@ resourceSelector:
     - groupKind: ControllerDeployment.core.gardener.cloud
       image:
         - .helm.ociRepository.ref
+        - .helm.values.imageVectorOverwrite.images.*.ref
     - groupKind: CloudProfile.core.gardener.cloud
       image:
         - .*
@@ -349,7 +347,7 @@ deploy:
                 image="$(cat /tmp/.skaffold-image)"
 
                 echo "> Pull gardenadm image and mount it to the temporary directory"
-                ctr images pull  "$image" --hosts-dir "/etc/containerd/certs.d"
+                ctr images pull --hosts-dir "/etc/containerd/certs.d" "$image"
                 ctr images mount "$image" "$tmp_dir"
 
                 echo "> Copy gardenadm binary to host (/gardenadm) and make it executable"

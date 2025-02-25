@@ -5,36 +5,36 @@
 package version_test
 
 import (
-	"bytes"
-	"io"
+	"regexp"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	. "github.com/onsi/gomega/gbytes"
 	"github.com/spf13/cobra"
-	"k8s.io/cli-runtime/pkg/genericiooptions"
 
+	"github.com/gardener/gardener/pkg/gardenadm/cmd"
 	. "github.com/gardener/gardener/pkg/gardenadm/cmd/version"
+	clitest "github.com/gardener/gardener/pkg/utils/test/cli"
 )
 
 var _ = Describe("Version", func() {
 	var (
-		ioStreams genericiooptions.IOStreams
-		out       *bytes.Buffer
-		cmd       *cobra.Command
+		globalOpts *cmd.Options
+		stdOut     *Buffer
+		command    *cobra.Command
 	)
 
 	BeforeEach(func() {
-		ioStreams, _, out, _ = genericiooptions.NewTestIOStreams()
-		cmd = NewCommand(ioStreams)
+		globalOpts = &cmd.Options{}
+		globalOpts.IOStreams, _, stdOut, _ = clitest.NewTestIOStreams()
+		command = NewCommand(globalOpts)
 	})
 
 	Describe("#RunE", func() {
 		It("should return the expected output", func() {
-			cmd.Run(cmd, nil)
+			command.Run(command, nil)
 
-			output, err := io.ReadAll(out)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(string(output)).To(Equal("gardenadm version v0.0.0-master+$Format:%H$\n"))
+			Eventually(stdOut).Should(Say(regexp.QuoteMeta("gardenadm version v0.0.0-master+$Format:%H$")))
 		})
 	})
 })

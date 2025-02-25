@@ -140,41 +140,6 @@ func MutateShootCARotation(shoot *gardencorev1beta1.Shoot, f func(*gardencorev1b
 	f(shoot.Status.Credentials.Rotation.CertificateAuthorities)
 }
 
-// MutateShootKubeconfigRotation mutates the .status.credentials.rotation.kubeconfig field based on the provided
-// mutation function. If the field is nil then it is initialized.
-func MutateShootKubeconfigRotation(shoot *gardencorev1beta1.Shoot, f func(*gardencorev1beta1.ShootKubeconfigRotation)) {
-	if f == nil {
-		return
-	}
-
-	if shoot.Status.Credentials == nil {
-		shoot.Status.Credentials = &gardencorev1beta1.ShootCredentials{}
-	}
-	if shoot.Status.Credentials.Rotation == nil {
-		shoot.Status.Credentials.Rotation = &gardencorev1beta1.ShootCredentialsRotation{}
-	}
-	if shoot.Status.Credentials.Rotation.Kubeconfig == nil {
-		shoot.Status.Credentials.Rotation.Kubeconfig = &gardencorev1beta1.ShootKubeconfigRotation{}
-	}
-
-	f(shoot.Status.Credentials.Rotation.Kubeconfig)
-}
-
-// IsShootKubeconfigRotationInitiationTimeAfterLastCompletionTime returns true when the lastInitiationTime in the
-// .status.credentials.rotation.kubeconfig field is newer than the lastCompletionTime. This is also true if the
-// lastCompletionTime is unset.
-func IsShootKubeconfigRotationInitiationTimeAfterLastCompletionTime(credentials *gardencorev1beta1.ShootCredentials) bool {
-	if credentials == nil ||
-		credentials.Rotation == nil ||
-		credentials.Rotation.Kubeconfig == nil ||
-		credentials.Rotation.Kubeconfig.LastInitiationTime == nil {
-		return false
-	}
-
-	return credentials.Rotation.Kubeconfig.LastCompletionTime == nil ||
-		credentials.Rotation.Kubeconfig.LastCompletionTime.Before(credentials.Rotation.Kubeconfig.LastInitiationTime)
-}
-
 // MutateShootSSHKeypairRotation mutates the .status.credentials.rotation.sshKeypair field based on the provided
 // mutation function. If the field is nil then it is initialized.
 func MutateShootSSHKeypairRotation(shoot *gardencorev1beta1.Shoot, f func(*gardencorev1beta1.ShootSSHKeypairRotation)) {
@@ -674,4 +639,29 @@ func LastInitiationTimeForWorkerPool(name string, pendingWorkersRollout []garden
 		return pendingWorkersRollout[i].LastInitiationTime
 	}
 	return globalLastInitiationTime
+}
+
+// IsShootAutonomous returns true if the shoot has a worker pool dedicated for running the control plane components.
+func IsShootAutonomous(shoot *gardencorev1beta1.Shoot) bool {
+	return slices.ContainsFunc(shoot.Spec.Provider.Workers, func(worker gardencorev1beta1.Worker) bool {
+		return worker.ControlPlane != nil
+	})
+}
+
+// ControlPlaneNamespaceForShoot returns the control plane namespace for the shoot. If it is an autonomous shoot,
+// kube-system is returned. Otherwise, it is the technical ID of the shoot.
+func ControlPlaneNamespaceForShoot(shoot *gardencorev1beta1.Shoot) string {
+	if IsShootAutonomous(shoot) {
+		return metav1.NamespaceSystem
+	}
+	return shoot.Status.TechnicalID
+}
+
+// IsUpdateStrategyInPlace returns true if the given machine update strategy is either AutoInPlaceUpdate or ManualInPlaceUpdate.
+func IsUpdateStrategyInPlace(updateStrategy *gardencorev1beta1.MachineUpdateStrategy) bool {
+	if updateStrategy == nil {
+		return false
+	}
+
+	return *updateStrategy == gardencorev1beta1.AutoInPlaceUpdate || *updateStrategy == gardencorev1beta1.ManualInPlaceUpdate
 }

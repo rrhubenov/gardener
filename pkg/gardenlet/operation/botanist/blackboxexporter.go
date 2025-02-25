@@ -24,11 +24,10 @@ func (b *Botanist) DefaultBlackboxExporterControlPlane() (component.DeployWaiter
 	return sharedcomponent.NewBlackboxExporter(
 		b.SeedClientSet.Client(),
 		b.SecretsManager,
-		b.Shoot.SeedNamespace,
+		b.Shoot.ControlPlaneNamespace,
 		blackboxexporter.Values{
-			ClusterType:       component.ClusterTypeSeed,
-			VPAEnabled:        true,
-			KubernetesVersion: b.Seed.KubernetesVersion,
+			ClusterType: component.ClusterTypeSeed,
+			VPAEnabled:  true,
 			PodLabels: map[string]string{
 				v1beta1constants.LabelNetworkPolicyToDNS:            v1beta1constants.LabelNetworkPolicyAllowed,
 				v1beta1constants.LabelNetworkPolicyToPublicNetworks: v1beta1constants.LabelNetworkPolicyAllowed,
@@ -40,7 +39,7 @@ func (b *Botanist) DefaultBlackboxExporterControlPlane() (component.DeployWaiter
 			},
 			PriorityClassName: v1beta1constants.PriorityClassNameShootControlPlane100,
 			Config:            controlplaneblackboxexporter.Config(),
-			ScrapeConfigs:     controlplaneblackboxexporter.ScrapeConfig(b.Shoot.SeedNamespace, monitoringv1alpha1.Target("https://"+gardenerutils.GetAPIServerDomain(b.Shoot.InternalClusterDomain)+"/healthz")),
+			ScrapeConfigs:     controlplaneblackboxexporter.ScrapeConfig(b.Shoot.ControlPlaneNamespace, monitoringv1alpha1.Target("https://"+gardenerutils.GetAPIServerDomain(b.Shoot.InternalClusterDomain)+"/healthz")),
 			Replicas:          b.Shoot.GetReplicas(1),
 		},
 	)
@@ -61,11 +60,10 @@ func (b *Botanist) DefaultBlackboxExporterCluster() (component.DeployWaiter, err
 	return sharedcomponent.NewBlackboxExporter(
 		b.SeedClientSet.Client(),
 		b.SecretsManager,
-		b.Shoot.SeedNamespace,
+		b.Shoot.ControlPlaneNamespace,
 		blackboxexporter.Values{
-			ClusterType:       component.ClusterTypeShoot,
-			VPAEnabled:        b.Shoot.WantsVerticalPodAutoscaler,
-			KubernetesVersion: b.Shoot.KubernetesVersion,
+			ClusterType: component.ClusterTypeShoot,
+			VPAEnabled:  b.Shoot.WantsVerticalPodAutoscaler,
 			PodLabels: map[string]string{
 				v1beta1constants.LabelNetworkPolicyShootFromSeed:    v1beta1constants.LabelNetworkPolicyAllowed,
 				v1beta1constants.LabelNetworkPolicyToDNS:            v1beta1constants.LabelNetworkPolicyAllowed,
@@ -74,8 +72,8 @@ func (b *Botanist) DefaultBlackboxExporterCluster() (component.DeployWaiter, err
 			},
 			PriorityClassName: "system-cluster-critical",
 			Config:            clusterblackboxexporter.Config(),
-			ScrapeConfigs:     clusterblackboxexporter.ScrapeConfig(b.Shoot.SeedNamespace),
-			PrometheusRules:   clusterblackboxexporter.PrometheusRule(b.Shoot.SeedNamespace),
+			ScrapeConfigs:     clusterblackboxexporter.ScrapeConfig(b.Shoot.ControlPlaneNamespace),
+			PrometheusRules:   clusterblackboxexporter.PrometheusRule(b.Shoot.ControlPlaneNamespace),
 			Replicas:          1,
 		},
 	)

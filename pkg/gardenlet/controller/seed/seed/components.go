@@ -32,6 +32,7 @@ import (
 	"github.com/gardener/gardener/pkg/component/extensions"
 	extensioncrds "github.com/gardener/gardener/pkg/component/extensions/crds"
 	"github.com/gardener/gardener/pkg/component/extensions/operatingsystemconfig/original/components/nodeagent"
+	"github.com/gardener/gardener/pkg/component/gardener/resourcemanager"
 	kubeapiserver "github.com/gardener/gardener/pkg/component/kubernetes/apiserver"
 	kubeapiserverconstants "github.com/gardener/gardener/pkg/component/kubernetes/apiserver/constants"
 	kubeapiserverexposure "github.com/gardener/gardener/pkg/component/kubernetes/apiserverexposure"
@@ -95,7 +96,9 @@ type components struct {
 	machineControllerManager component.DeployWaiter
 	dwdWeeder                component.DeployWaiter
 	dwdProber                component.DeployWaiter
-	vpnAuthzServer           component.DeployWaiter
+
+	// TODO(Wieneo): Remove this after Gardener v1.117 was released
+	vpnAuthzServer component.DeployWaiter
 
 	kubeAPIServerService component.Deployer
 	kubeAPIServerIngress component.Deployer
@@ -160,7 +163,7 @@ func (r *Reconciler) instantiateComponents(
 	if err != nil {
 		return
 	}
-	c.verticalPodAutoscaler, err = r.newVerticalPodAutoscaler(seed.GetInfo().Spec.Settings, secretsManager)
+	c.verticalPodAutoscaler, err = r.newVerticalPodAutoscaler(seed.GetInfo().Spec.Settings, secretsManager, seedIsGarden)
 	if err != nil {
 		return
 	}
@@ -174,6 +177,8 @@ func (r *Reconciler) instantiateComponents(
 	if err != nil {
 		return
 	}
+
+	// TODO(Wieneo): Remove this after Gardener v1.117 was released
 	c.vpnAuthzServer, err = r.newVPNAuthzServer()
 	if err != nil {
 		return
@@ -252,26 +257,32 @@ func (r *Reconciler) newGardenerResourceManager(seed *gardencorev1beta1.Seed, se
 		additionalNetworkPolicyNamespaceSelectors = config.AdditionalNamespaceSelectors
 	}
 
-	return sharedcomponent.NewRuntimeGardenerResourceManager(
-		r.SeedClientSet.Client(),
-		r.GardenNamespace,
-		r.SeedVersion,
-		secretsManager,
-		r.Config.LogLevel, r.Config.LogFormat,
-		v1beta1constants.SecretNameCASeed,
-		v1beta1constants.PriorityClassNameSeedSystemCritical,
-		defaultNotReadyTolerationSeconds,
-		defaultUnreachableTolerationSeconds,
-		features.DefaultFeatureGate.Enabled(features.DefaultSeccompProfile),
-		v1beta1helper.SeedSettingTopologyAwareRoutingEnabled(seed.Spec.Settings),
-		additionalNetworkPolicyNamespaceSelectors,
-		seed.Spec.Provider.Zones,
-		nil,
-	)
+	return sharedcomponent.NewRuntimeGardenerResourceManager(r.SeedClientSet.Client(), r.GardenNamespace, secretsManager, resourcemanager.Values{
+		DefaultSeccompProfileEnabled:              features.DefaultFeatureGate.Enabled(features.DefaultSeccompProfile),
+		DefaultNotReadyToleration:                 defaultNotReadyTolerationSeconds,
+		DefaultUnreachableToleration:              defaultUnreachableTolerationSeconds,
+		EndpointSliceHintsEnabled:                 v1beta1helper.SeedSettingTopologyAwareRoutingEnabled(seed.Spec.Settings),
+		LogLevel:                                  r.Config.LogLevel,
+		LogFormat:                                 r.Config.LogFormat,
+		NetworkPolicyAdditionalNamespaceSelectors: additionalNetworkPolicyNamespaceSelectors,
+		PriorityClassName:                         v1beta1constants.PriorityClassNameSeedSystemCritical,
+		SecretNameServerCA:                        v1beta1constants.SecretNameCASeed,
+		Zones:                                     seed.Spec.Provider.Zones,
+	})
 }
 
 func (r *Reconciler) newIstio(ctx context.Context, seed *seedpkg.Seed, isGardenCluster bool) (component.DeployWaiter, map[string]string, string, error) {
 	labels := sharedcomponent.GetIstioZoneLabels(r.Config.SNI.Ingress.Labels, nil)
+
+	servicePorts := []corev1.ServicePort{
+		{Name: "tcp", Port: 443, TargetPort: intstr.FromInt32(9443)},
+		{Name: "tls-tunnel", Port: vpnseedserver.GatewayPort, TargetPort: intstr.FromInt32(vpnseedserver.GatewayPort)},
+	}
+
+	proxyProtocolEnabled := !features.DefaultFeatureGate.Enabled(features.RemoveAPIServerProxyLegacyPort)
+	if proxyProtocolEnabled {
+		servicePorts = append(servicePorts, corev1.ServicePort{Name: "proxy", Port: 8443, TargetPort: intstr.FromInt32(8443)})
+	}
 
 	istioDeployer, err := sharedcomponent.NewIstio(
 		ctx,
@@ -286,12 +297,8 @@ func (r *Reconciler) newIstio(ctx context.Context, seed *seedpkg.Seed, isGardenC
 		seed.GetLoadBalancerServiceAnnotations(),
 		seed.GetLoadBalancerServiceExternalTrafficPolicy(),
 		r.Config.SNI.Ingress.ServiceExternalIP,
-		[]corev1.ServicePort{
-			{Name: "proxy", Port: 8443, TargetPort: intstr.FromInt32(8443)},
-			{Name: "tcp", Port: 443, TargetPort: intstr.FromInt32(9443)},
-			{Name: "tls-tunnel", Port: vpnseedserver.GatewayPort, TargetPort: intstr.FromInt32(vpnseedserver.GatewayPort)},
-		},
-		true,
+		servicePorts,
+		proxyProtocolEnabled,
 		seed.GetLoadBalancerServiceProxyProtocolTermination(),
 		true,
 		seed.GetInfo().Spec.Provider.Zones,
@@ -374,8 +381,8 @@ func (r *Reconciler) newDependencyWatchdogs(seedSettings *gardencorev1beta1.Seed
 	}
 
 	var (
-		dwdWeederValues = dependencywatchdog.BootstrapperValues{Role: dependencywatchdog.RoleWeeder, Image: image.String(), KubernetesVersion: r.SeedVersion}
-		dwdProberValues = dependencywatchdog.BootstrapperValues{Role: dependencywatchdog.RoleProber, Image: image.String(), KubernetesVersion: r.SeedVersion}
+		dwdWeederValues = dependencywatchdog.BootstrapperValues{Role: dependencywatchdog.RoleWeeder, Image: image.String()}
+		dwdProberValues = dependencywatchdog.BootstrapperValues{Role: dependencywatchdog.RoleProber, Image: image.String()}
 	)
 
 	dwdWeeder = component.OpDestroyWithoutWait(dependencywatchdog.NewBootstrapper(r.SeedClientSet.Client(), r.GardenNamespace, dwdWeederValues))
@@ -438,6 +445,7 @@ func (r *Reconciler) newDependencyWatchdogs(seedSettings *gardencorev1beta1.Seed
 	return
 }
 
+// TODO(Wieneo): Remove this after Gardener v1.117 was released
 func (r *Reconciler) newVPNAuthzServer() (component.DeployWaiter, error) {
 	image, err := imagevector.Containers().FindImage(imagevector.ContainerImageNameExtAuthzServer, imagevectorutils.RuntimeVersion(r.SeedVersion.String()), imagevectorutils.TargetVersion(r.SeedVersion.String()))
 	if err != nil {
@@ -448,7 +456,6 @@ func (r *Reconciler) newVPNAuthzServer() (component.DeployWaiter, error) {
 		r.SeedClientSet.Client(),
 		r.GardenNamespace,
 		image.String(),
-		r.SeedVersion,
 	), nil
 }
 
@@ -694,7 +701,7 @@ func (r *Reconciler) newFluentCustomResources(seedIsGarden bool) (deployer compo
 	)
 }
 
-func (r *Reconciler) newVerticalPodAutoscaler(settings *gardencorev1beta1.SeedSettings, secretsManager secretsmanager.Interface) (component.DeployWaiter, error) {
+func (r *Reconciler) newVerticalPodAutoscaler(settings *gardencorev1beta1.SeedSettings, secretsManager secretsmanager.Interface, isGardenCluster bool) (component.DeployWaiter, error) {
 	return sharedcomponent.NewVerticalPodAutoscaler(
 		r.SeedClientSet.Client(),
 		r.GardenNamespace,
@@ -705,6 +712,7 @@ func (r *Reconciler) newVerticalPodAutoscaler(settings *gardencorev1beta1.SeedSe
 		v1beta1constants.PriorityClassNameSeedSystem800,
 		v1beta1constants.PriorityClassNameSeedSystem700,
 		v1beta1constants.PriorityClassNameSeedSystem700,
+		isGardenCluster,
 	)
 }
 

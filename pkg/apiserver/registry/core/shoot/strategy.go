@@ -131,7 +131,6 @@ func mustIncreaseGeneration(oldShoot, newShoot *core.Shoot) bool {
 				v1beta1constants.OperationRotateServiceAccountKeyComplete,
 				v1beta1constants.OperationRotateETCDEncryptionKeyStart,
 				v1beta1constants.OperationRotateETCDEncryptionKeyComplete,
-				v1beta1constants.ShootOperationRotateKubeconfigCredentials,
 				v1beta1constants.OperationRotateObservabilityCredentials:
 				// We don't want to remove the annotation so that the gardenlet can pick it up and perform
 				// the rotation. It has to remove the annotation after it is done.
@@ -186,6 +185,12 @@ func (shootStrategy) Canonicalize(obj runtime.Object) {
 
 	gardenerutils.MaintainSeedNameLabels(shoot, shoot.Spec.SeedName, shoot.Status.SeedName)
 	syncLegacyAccessRestrictionLabelWithNewField(shoot)
+
+	// TODO(shafeeqes): Remove this in gardener v1.120
+	shoot.Spec.Kubernetes.EnableStaticTokenKubeconfig = nil
+	if shoot.Status.Credentials != nil && shoot.Status.Credentials.Rotation != nil {
+		shoot.Status.Credentials.Rotation.Kubeconfig = nil
+	}
 }
 
 func (shootStrategy) AllowCreateOnUpdate() bool {
@@ -259,6 +264,13 @@ func (shootBindingStrategy) PrepareForUpdate(_ context.Context, obj, old runtime
 
 	newShoot.Status = oldShoot.Status
 
+	// Remove "Create Pending" from status if seed name got set
+	if lastOp := newShoot.Status.LastOperation; lastOp != nil &&
+		lastOp.Type == core.LastOperationTypeCreate && lastOp.State == core.LastOperationStatePending &&
+		oldShoot.Spec.SeedName == nil && newShoot.Spec.SeedName != nil {
+		newShoot.Status.LastOperation = nil
+	}
+
 	if !apiequality.Semantic.DeepEqual(oldShoot.Spec, newShoot.Spec) {
 		newShoot.Generation = oldShoot.Generation + 1
 	}
@@ -297,7 +309,7 @@ func GetAttrs(obj runtime.Object) (labels.Set, fields.Set, error) {
 	if !ok {
 		return nil, nil, fmt.Errorf("not a shoot")
 	}
-	return labels.Set(shoot.ObjectMeta.Labels), ToSelectableFields(shoot), nil
+	return shoot.ObjectMeta.Labels, ToSelectableFields(shoot), nil
 }
 
 // MatchShoot returns a generic matcher for a given label and field selector.

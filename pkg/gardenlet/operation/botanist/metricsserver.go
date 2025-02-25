@@ -29,12 +29,11 @@ func (b *Botanist) DefaultMetricsServer() (component.DeployWaiter, error) {
 		Image:             image.String(),
 		VPAEnabled:        b.Shoot.WantsVerticalPodAutoscaler,
 		KubeAPIServerHost: kubeAPIServerHost,
-		KubernetesVersion: b.Shoot.KubernetesVersion,
 	}
 
 	return metricsserver.New(
 		b.SeedClientSet.Client(),
-		b.Shoot.SeedNamespace,
+		b.Shoot.ControlPlaneNamespace,
 		b.SecretsManager,
 		values,
 	), nil

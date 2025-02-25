@@ -7,7 +7,6 @@ package botanist
 import (
 	"context"
 
-	"github.com/Masterminds/semver/v3"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
@@ -24,11 +23,6 @@ import (
 
 // DefaultResourceManager returns an instance of Gardener Resource Manager with defaults configured for being deployed in a Shoot namespace
 func (b *Botanist) DefaultResourceManager() (resourcemanager.Interface, error) {
-	version, err := semver.NewVersion(b.SeedClientSet.Version())
-	if err != nil {
-		return nil, err
-	}
-
 	var defaultNotReadyTolerationSeconds, defaultUnreachableTolerationSeconds *int64
 	if b.Config != nil && b.Config.NodeToleration != nil {
 		nodeToleration := b.Config.NodeToleration
@@ -36,28 +30,24 @@ func (b *Botanist) DefaultResourceManager() (resourcemanager.Interface, error) {
 		defaultUnreachableTolerationSeconds = nodeToleration.DefaultUnreachableTolerationSeconds
 	}
 
-	return shared.NewTargetGardenerResourceManager(
-		b.SeedClientSet.Client(),
-		b.Shoot.SeedNamespace,
-		b.SecretsManager,
-		b.Seed.GetInfo().Status.ClusterIdentity,
-		defaultNotReadyTolerationSeconds,
-		defaultUnreachableTolerationSeconds,
-		version,
-		logger.InfoLevel, logger.FormatJSON,
-		"",
-		true,
-		v1beta1constants.PriorityClassNameShootControlPlane400,
-		v1beta1helper.ShootSchedulingProfile(b.Shoot.GetInfo()),
-		v1beta1constants.SecretNameCACluster,
-		gardenerutils.ExtractSystemComponentsTolerations(b.Shoot.GetInfo().Spec.Provider.Workers),
-		b.Shoot.TopologyAwareRoutingEnabled,
-		ptr.To(b.Shoot.ComputeOutOfClusterAPIServerAddress(true)),
-		b.Shoot.IsWorkerless,
-		[]string{metav1.NamespaceSystem, v1beta1constants.KubernetesDashboardNamespace, corev1.NamespaceNodeLease},
-		b.Shoot.OSCSyncJitterPeriod,
-		true,
-	)
+	return shared.NewTargetGardenerResourceManager(b.SeedClientSet.Client(), b.Shoot.ControlPlaneNamespace, b.SecretsManager, resourcemanager.Values{
+		ClusterIdentity:                     b.Seed.GetInfo().Status.ClusterIdentity,
+		DefaultNotReadyToleration:           defaultNotReadyTolerationSeconds,
+		DefaultUnreachableToleration:        defaultUnreachableTolerationSeconds,
+		IsWorkerless:                        b.Shoot.IsWorkerless,
+		KubernetesServiceHost:               ptr.To(b.Shoot.ComputeOutOfClusterAPIServerAddress(true)),
+		LogLevel:                            logger.InfoLevel,
+		LogFormat:                           logger.FormatJSON,
+		NodeAgentReconciliationMaxDelay:     b.Shoot.OSCSyncJitterPeriod,
+		NodeAgentAuthorizerEnabled:          true,
+		PodTopologySpreadConstraintsEnabled: true,
+		PriorityClassName:                   v1beta1constants.PriorityClassNameShootControlPlane400,
+		SchedulingProfile:                   v1beta1helper.ShootSchedulingProfile(b.Shoot.GetInfo()),
+		SecretNameServerCA:                  v1beta1constants.SecretNameCACluster,
+		SystemComponentTolerations:          gardenerutils.ExtractSystemComponentsTolerations(b.Shoot.GetInfo().Spec.Provider.Workers),
+		TargetNamespaces:                    []string{metav1.NamespaceSystem, v1beta1constants.KubernetesDashboardNamespace, corev1.NamespaceNodeLease},
+		TopologyAwareRoutingEnabled:         b.Shoot.TopologyAwareRoutingEnabled,
+	})
 }
 
 // DeployGardenerResourceManager deploys the gardener-resource-manager
@@ -67,7 +57,7 @@ func (b *Botanist) DeployGardenerResourceManager(ctx context.Context) error {
 		b.SeedClientSet.Client(),
 		b.SecretsManager,
 		b.Shoot.Components.ControlPlane.ResourceManager,
-		b.Shoot.SeedNamespace,
+		b.Shoot.ControlPlaneNamespace,
 		func(ctx context.Context) (int32, error) {
 			return b.determineControllerReplicas(ctx, v1beta1constants.DeploymentNameGardenerResourceManager, 2, false)
 		},
@@ -76,5 +66,5 @@ func (b *Botanist) DeployGardenerResourceManager(ctx context.Context) error {
 
 // ScaleGardenerResourceManagerToOne scales the gardener-resource-manager deployment
 func (b *Botanist) ScaleGardenerResourceManagerToOne(ctx context.Context) error {
-	return kubernetesutils.ScaleDeployment(ctx, b.SeedClientSet.Client(), client.ObjectKey{Namespace: b.Shoot.SeedNamespace, Name: v1beta1constants.DeploymentNameGardenerResourceManager}, 1)
+	return kubernetesutils.ScaleDeployment(ctx, b.SeedClientSet.Client(), client.ObjectKey{Namespace: b.Shoot.ControlPlaneNamespace, Name: v1beta1constants.DeploymentNameGardenerResourceManager}, 1)
 }

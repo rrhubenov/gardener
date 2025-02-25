@@ -327,7 +327,7 @@ func (v *ValidateShoot) Admit(ctx context.Context, a admission.Attributes, _ adm
 		return err
 	}
 	if allErrs = validationContext.ensureMachineImages(); len(allErrs) > 0 {
-		return admission.NewForbidden(a, fmt.Errorf("%+v", allErrs))
+		return admission.NewForbidden(a, allErrs.ToAggregate())
 	}
 
 	validationContext.addMetadataAnnotations(a)
@@ -339,6 +339,7 @@ func (v *ValidateShoot) Admit(ctx context.Context, a admission.Attributes, _ adm
 	allErrs = append(allErrs, validationContext.validateAccessRestrictions()...)
 	allErrs = append(allErrs, validationContext.validateProvider(a)...)
 	allErrs = append(allErrs, validationContext.validateAdmissionPlugins(a, v.secretLister)...)
+	allErrs = append(allErrs, validationContext.validateLimits(a)...)
 
 	// Skip the validation if the operation is admission.Delete or the spec hasn't changed.
 	if a.GetOperation() != admission.Delete && !reflect.DeepEqual(validationContext.shoot.Spec, validationContext.oldShoot.Spec) {
@@ -350,7 +351,7 @@ func (v *ValidateShoot) Admit(ctx context.Context, a admission.Attributes, _ adm
 	}
 
 	if len(allErrs) > 0 {
-		return admission.NewForbidden(a, fmt.Errorf("%+v", allErrs))
+		return admission.NewForbidden(a, allErrs.ToAggregate())
 	}
 
 	return nil
@@ -1006,51 +1007,7 @@ func (c *validationContext) validateKubernetes(a admission.Attributes) field.Err
 
 	allErrs = append(allErrs, c.validateKubeAPIServerOIDCConfig(a)...)
 
-	if c.shoot.DeletionTimestamp == nil {
-		performKubernetesDefaulting(c.shoot, c.oldShoot)
-	}
-
 	return allErrs
-}
-
-func performKubernetesDefaulting(newShoot, oldShoot *core.Shoot) {
-	if newShoot.Spec.Kubernetes.EnableStaticTokenKubeconfig == nil {
-		// Error is ignored here because we cannot do anything meaningful with it - variable will default to "false".
-		if k8sLessThan126, _ := versionutils.CheckVersionMeetsConstraint(newShoot.Spec.Kubernetes.Version, "< 1.26"); k8sLessThan126 {
-			newShoot.Spec.Kubernetes.EnableStaticTokenKubeconfig = ptr.To(true)
-		} else {
-			newShoot.Spec.Kubernetes.EnableStaticTokenKubeconfig = ptr.To(false)
-		}
-	}
-
-	if len(newShoot.Spec.Provider.Workers) > 0 {
-		// Error is ignored here because we cannot do anything meaningful with them - variables will default to `false`.
-		k8sLess127, _ := versionutils.CheckVersionMeetsConstraint(newShoot.Spec.Kubernetes.Version, "< 1.27")
-		if newShoot.Spec.Kubernetes.KubeControllerManager.NodeMonitorGracePeriod == nil {
-			if k8sLess127 {
-				newShoot.Spec.Kubernetes.KubeControllerManager.NodeMonitorGracePeriod = &metav1.Duration{Duration: 2 * time.Minute}
-			} else {
-				newShoot.Spec.Kubernetes.KubeControllerManager.NodeMonitorGracePeriod = &metav1.Duration{Duration: 40 * time.Second}
-			}
-		} else if upgradeToKubernetes127(newShoot, oldShoot) && defaultNodeGracePeriod(oldShoot) {
-			newShoot.Spec.Kubernetes.KubeControllerManager.NodeMonitorGracePeriod = &metav1.Duration{Duration: 40 * time.Second}
-		}
-	}
-}
-
-func defaultNodeGracePeriod(shoot *core.Shoot) bool {
-	return shoot.Spec.Kubernetes.KubeControllerManager != nil &&
-		reflect.DeepEqual(shoot.Spec.Kubernetes.KubeControllerManager.NodeMonitorGracePeriod, &metav1.Duration{Duration: 2 * time.Minute})
-}
-
-func upgradeToKubernetes127(newShoot, oldShoot *core.Shoot) bool {
-	var oldShootK8sLess127 bool
-	if oldShoot.Spec.Kubernetes.Version != "" {
-		oldShootK8sLess127, _ = versionutils.CheckVersionMeetsConstraint(oldShoot.Spec.Kubernetes.Version, "< 1.27")
-	}
-	newShootK8sGreaterEqual127, _ := versionutils.CheckVersionMeetsConstraint(newShoot.Spec.Kubernetes.Version, ">= 1.27")
-
-	return oldShootK8sLess127 && newShootK8sGreaterEqual127
 }
 
 func (c *validationContext) validateProvider(a admission.Attributes) field.ErrorList {
@@ -2134,4 +2091,39 @@ func (c *validationContext) validateManagedServiceAccountIssuer(
 	}
 
 	return nil
+}
+
+func (c *validationContext) validateLimits(a admission.Attributes) field.ErrorList {
+	var allErrs field.ErrorList
+
+	if a.GetOperation() == admission.Delete || c.shoot.DeletionTimestamp != nil || c.cloudProfileSpec.Limits == nil {
+		return nil
+	}
+
+	if maxNodesTotal := c.cloudProfileSpec.Limits.MaxNodesTotal; maxNodesTotal != nil {
+		allErrs = append(allErrs, validateMaxNodesTotal(c.shoot.Spec.Provider.Workers, *maxNodesTotal)...)
+	}
+
+	return allErrs
+}
+
+func validateMaxNodesTotal(workers []core.Worker, maxNodesTotal int32) field.ErrorList {
+	var (
+		allErrs      field.ErrorList
+		fldPath      = field.NewPath("spec", "provider", "workers")
+		totalMinimum int32
+	)
+
+	for i, worker := range workers {
+		totalMinimum += worker.Minimum
+		if worker.Maximum > maxNodesTotal {
+			allErrs = append(allErrs, field.Forbidden(fldPath.Index(i).Child("maximum"), fmt.Sprintf("the maximum node count of a worker pool must not exceed the limit of %d configured in the CloudProfile", maxNodesTotal)))
+		}
+	}
+
+	if totalMinimum > maxNodesTotal {
+		allErrs = append(allErrs, field.Forbidden(fldPath, fmt.Sprintf("the total minimum node count of all worker pools must not exceed the limit of %d configured in the CloudProfile", maxNodesTotal)))
+	}
+
+	return allErrs
 }

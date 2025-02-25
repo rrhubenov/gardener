@@ -83,7 +83,7 @@ func (r *Reconciler) reconcile(
 }
 
 func (r *Reconciler) checkMinimumK8SVersion(version string) error {
-	const minKubernetesVersion = "1.25"
+	const minKubernetesVersion = "1.27"
 
 	seedVersionOK, err := versionutils.CompareVersions(version, ">=", minKubernetesVersion)
 	if err != nil {
@@ -298,6 +298,7 @@ func (r *Reconciler) runReconcileSeedFlow(
 			Dependencies: flow.NewTaskIDs(waitUntilRequiredExtensionsReady),
 		})
 		syncPointReadyForSystemComponents = flow.NewTaskIDs(
+			deployGardenerResourceManager,
 			deployClusterIdentity,
 			cleanupOrphanedExposureClassHandlers,
 		)
@@ -338,9 +339,10 @@ func (r *Reconciler) runReconcileSeedFlow(
 			Fn:           c.dwdProber.Deploy,
 			Dependencies: flow.NewTaskIDs(syncPointReadyForSystemComponents),
 		})
+		// TODO(Wieneo): Remove this after Gardener v1.117 was released
 		_ = g.Add(flow.Task{
-			Name:         "Deploying VPN authorization server",
-			Fn:           c.vpnAuthzServer.Deploy,
+			Name:         "Destroy VPN authorization server",
+			Fn:           component.OpDestroyAndWait(c.vpnAuthzServer).Destroy,
 			Dependencies: flow.NewTaskIDs(syncPointReadyForSystemComponents),
 		})
 		_ = g.Add(flow.Task{
@@ -464,16 +466,19 @@ func (r *Reconciler) runReconcileSeedFlow(
 			Dependencies: flow.NewTaskIDs(syncPointReadyForSystemComponents),
 		})
 		_ = g.Add(flow.Task{
-			Name: "Deploying seed Prometheus",
-			Fn:   c.seedPrometheus.Deploy,
+			Name:         "Deploying seed Prometheus",
+			Fn:           c.seedPrometheus.Deploy,
+			Dependencies: flow.NewTaskIDs(syncPointReadyForSystemComponents),
 		})
 		_ = g.Add(flow.Task{
-			Name: "Deploying aggregate Prometheus",
-			Fn:   c.aggregatePrometheus.Deploy,
+			Name:         "Deploying aggregate Prometheus",
+			Fn:           c.aggregatePrometheus.Deploy,
+			Dependencies: flow.NewTaskIDs(syncPointReadyForSystemComponents),
 		})
 		_ = g.Add(flow.Task{
-			Name: "Deploying Alertmanager",
-			Fn:   c.alertManager.Deploy,
+			Name:         "Deploying Alertmanager",
+			Fn:           c.alertManager.Deploy,
+			Dependencies: flow.NewTaskIDs(syncPointReadyForSystemComponents),
 		})
 	)
 

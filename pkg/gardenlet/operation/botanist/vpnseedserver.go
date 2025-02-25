@@ -31,9 +31,8 @@ func (b *Botanist) DefaultVPNSeedServer() (vpnseedserver.Interface, error) {
 	}
 
 	values := vpnseedserver.Values{
-		RuntimeKubernetesVersion: b.Seed.KubernetesVersion,
-		ImageAPIServerProxy:      imageAPIServerProxy.String(),
-		ImageVPNSeedServer:       imageVPNSeedServer.String(),
+		ImageAPIServerProxy: imageAPIServerProxy.String(),
+		ImageVPNSeedServer:  imageVPNSeedServer.String(),
 		Network: vpnseedserver.NetworkValues{
 			IPFamilies: b.Shoot.GetInfo().Spec.Networking.IPFamilies,
 			// Pod/service/node network CIDRs are set on deployment to handle dynamic network CIDRs
@@ -56,7 +55,7 @@ func (b *Botanist) DefaultVPNSeedServer() (vpnseedserver.Interface, error) {
 
 	return vpnseedserver.New(
 		b.SeedClientSet.Client(),
-		b.Shoot.SeedNamespace,
+		b.Shoot.ControlPlaneNamespace,
 		b.SecretsManager,
 		func() string { return b.IstioNamespace() },
 		values,

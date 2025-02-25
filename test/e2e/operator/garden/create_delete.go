@@ -47,7 +47,7 @@ var _ = Describe("Garden Tests", Label("Garden", "default"), func() {
 		Expect(runtimeClient.Create(ctx, backupSecret)).To(Succeed())
 		Expect(runtimeClient.Create(ctx, garden)).To(Succeed())
 
-		waitForGardenToBeReconciled(ctx, garden)
+		waitForGardenToBeReconciledAndHealthy(ctx, garden)
 
 		DeferCleanup(func() {
 			ctx, cancel = context.WithTimeout(parentCtx, 5*time.Minute)
@@ -161,6 +161,16 @@ var _ = Describe("Garden Tests", Label("Garden", "default"), func() {
 			controllerDeploymentList := &gardencorev1.ControllerDeploymentList{}
 			g.Expect(virtualClusterClient.Client().List(ctx, controllerDeploymentList)).To(Succeed())
 			g.Expect(controllerDeploymentList.Items).To(ContainElement(MatchFields(IgnoreExtras, Fields{"ObjectMeta": MatchFields(IgnoreExtras, Fields{"Name": Equal("provider-local")})})))
+		}).Should(Succeed())
+
+		By("Verify 'gardener-system-public' namespace and 'gardener-info' configmap exist")
+		Eventually(func(g Gomega) {
+			namespace := &corev1.Namespace{}
+			g.Expect(virtualClusterClient.Client().Get(ctx, client.ObjectKey{Name: gardencorev1beta1.GardenerSystemPublicNamespace}, namespace)).To(Succeed())
+
+			configMap := &corev1.ConfigMap{}
+			g.Expect(virtualClusterClient.Client().Get(ctx, client.ObjectKey{Namespace: gardencorev1beta1.GardenerSystemPublicNamespace, Name: "gardener-info"}, configMap)).To(Succeed())
+			g.Expect(configMap.Data).To(HaveKey("gardenerAPIServer"))
 		}).Should(Succeed())
 	})
 })

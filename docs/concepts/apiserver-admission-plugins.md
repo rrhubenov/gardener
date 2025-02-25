@@ -88,7 +88,7 @@ It prevents creating `Project`s with a non-empty `.spec.namespace` if the value 
 _(enabled by default)_
 
 This admission controller enables [object count ResourceQuotas](https://kubernetes.io/docs/concepts/policy/resource-quotas/#object-count-quota) for Gardener resources, e.g. `Shoots`, `SecretBindings`, `Projects`, etc.
-> :warning: In addition to this admission plugin, the [ResourceQuota controller](https://github.com/kubernetes/kubernetes/blob/release-1.2/docs/design/admission_control_resource_quota.md#resource-quota-controller) must be enabled for the Kube-Controller-Manager of your Garden cluster. 
+> :warning: In addition to this admission plugin, the [ResourceQuota controller](https://github.com/kubernetes/kubernetes/blob/release-1.2/docs/design/admission_control_resource_quota.md#resource-quota-controller) must be enabled for the Kube-Controller-Manager of your Garden cluster.
 
 ## `ResourceReferenceManager`
 
@@ -114,10 +114,10 @@ Rejects the deletion if `Shoot`(s) reference the seed cluster.
 _(enabled by default)_
 
 This admission controller reacts on `CREATE` and `UPDATE` operations for `Seed`s.
-It maintains the `seed.gardener.cloud/<name>` labels for it.
-More specifically, it adds that the `seed.gardener.cloud/<name>=true` label where `<name>` is
-- the name of the `Seed` resource (a `Seed` named `foo` will get label `seed.gardener.cloud/foo=true`).
-- the name of the parent `Seed` resource in case it is a `ManagedSeed` (a `Seed` named `foo` that is created by a `ManagedSeed` which references a `Shoot` running a `Seed` called `bar` will get label `seed.gardener.cloud/bar=true`).
+It maintains the `name.seed.gardener.cloud/<name>` labels for it.
+More specifically, it adds that the `name.seed.gardener.cloud/<name>=true` label where `<name>` is
+- the name of the `Seed` resource (a `Seed` named `foo` will get label `name.seed.gardener.cloud/foo=true`).
+- the name of the parent `Seed` resource in case it is a `ManagedSeed` (a `Seed` named `foo` that is created by a `ManagedSeed` which references a `Shoot` running a `Seed` called `bar` will get label `name.seed.gardener.cloud/bar=true`).
 
 ## `ShootDNS`
 
@@ -165,7 +165,7 @@ Operators can provide an optional label selector via the `selector` field to lim
 _(disabled by default)_
 
 This admission controller reacts on `CREATE` operations for `Shoot`s.
-If enabled, it will enable the managed `VerticalPodAutoscaler` components (for more information, see [Vertical Pod Auto-Scaling](../usage/autoscaling/shoot_autoscaling.md#vertical-pod-auto-scaling)) 
+If enabled, it will enable the managed `VerticalPodAutoscaler` components (for more information, see [Vertical Pod Auto-Scaling](../usage/autoscaling/shoot_autoscaling.md#vertical-pod-auto-scaling))
 by setting `spec.kubernetes.verticalPodAutoscaler.enabled=true` for newly created Shoots.
 Already existing Shoots and new Shoots that explicitly disable VPA (`spec.kubernetes.verticalPodAutoscaler.enabled=false`)
 will not be affected by this admission plugin.

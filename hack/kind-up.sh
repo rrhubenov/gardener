@@ -62,7 +62,7 @@ check_local_dns_records() {
     glgc_ip_address=$(dscacheutil -q host -a name garden.local.gardener.cloud | grep "ip_address" | head -n 1| cut -d' ' -f2 || true)
   elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
     # Suppress exit code using "|| true"
-    glgc_ip_address="$(getent ahosts garden.local.gardener.cloud | cut -d' ' -f1 || true)"
+    glgc_ip_address="$(getent ahosts garden.local.gardener.cloud || true)"
   else
     echo "Warning: Unknown OS. Make sure garden.local.gardener.cloud resolves to 127.0.0.1"
     return 0
@@ -70,6 +70,8 @@ check_local_dns_records() {
     
   if ! echo "$glgc_ip_address" | grep -q "127.0.0.1" ; then
       echo "Error: garden.local.gardener.cloud does not resolve to 127.0.0.1. Please add a line for it in /etc/hosts"
+      echo "Command output: $glgc_ip_address"
+      echo "Content of '/etc/hosts':\n$(cat /etc/hosts)"
       exit 1
   fi
 }
@@ -359,9 +361,19 @@ EOF
     done
 fi
 
-# workaround https://kind.sigs.k8s.io/docs/user/known-issues/#pod-errors-due-to-too-many-open-files
+# workarounds for KinD issues
 for node in $nodes; do
+  # workaround https://kind.sigs.k8s.io/docs/user/known-issues/#pod-errors-due-to-too-many-open-files
   docker exec "$node" sh -c "sysctl fs.inotify.max_user_instances=8192"
+
+  # TODO(marc1404): Remove once kindest/node uses runc >= v1.2.4
+  # workaround issue with runc v1.2.3 provided by kindest/node:v1.32.0 by installing runc v1.2.4 manually (https://github.com/opencontainers/runc/pull/4555)
+  if [ -n "${CI:-}" ]; then
+    echo "Installing runc on node $node from container filesystem"
+    docker cp /get-runc/runc "$node":/usr/local/sbin/runc
+  else
+    docker exec -i "$node" sh -c "bash -" < "$(dirname "$0")/../pkg/provider-local/node/patch-runc.sh"
+  fi
 done
 
 if [[ "$KUBECONFIG" != "$PATH_KUBECONFIG" ]]; then

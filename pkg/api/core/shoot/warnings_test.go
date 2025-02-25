@@ -12,7 +12,6 @@ import (
 	. "github.com/onsi/gomega"
 	gomegatypes "github.com/onsi/gomega/types"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/ptr"
 
 	. "github.com/gardener/gardener/pkg/api/core/shoot"
 	"github.com/gardener/gardener/pkg/apis/core"
@@ -30,8 +29,7 @@ var _ = Describe("Warnings", func() {
 			shoot = &core.Shoot{
 				Spec: core.ShootSpec{
 					Kubernetes: core.Kubernetes{
-						Version:                     "1.26.5",
-						EnableStaticTokenKubeconfig: ptr.To(false),
+						Version: "1.31.1",
 					},
 					Provider: core.Provider{
 						Workers: []core.Worker{{Name: "test"}},
@@ -46,16 +44,6 @@ var _ = Describe("Warnings", func() {
 
 		It("should return nil when shoot does not have any problematic configuration", func() {
 			Expect(GetWarnings(ctx, shoot, nil, credentialsRotationInterval)).To(BeEmpty())
-		})
-
-		It("should return a warning when static token kubeconfig is nil", func() {
-			shoot.Spec.Kubernetes.EnableStaticTokenKubeconfig = nil
-			Expect(GetWarnings(ctx, shoot, nil, credentialsRotationInterval)).To(ContainElement(ContainSubstring("you should consider disabling the static token kubeconfig")))
-		})
-
-		It("should return a warning when static token kubeconfig is explicitly enabled", func() {
-			shoot.Spec.Kubernetes.EnableStaticTokenKubeconfig = ptr.To(true)
-			Expect(GetWarnings(ctx, shoot, nil, credentialsRotationInterval)).To(ContainElement(ContainSubstring("you should consider disabling the static token kubeconfig")))
 		})
 
 		Context("credentials rotation", func() {
@@ -80,7 +68,6 @@ var _ = Describe("Warnings", func() {
 
 					rotation := &core.ShootCredentialsRotation{
 						CertificateAuthorities: &core.CARotation{},
-						Kubeconfig:             &core.ShootKubeconfigRotation{},
 						SSHKeypair:             &core.ShootSSHKeypairRotation{},
 						Observability:          &core.ObservabilityRotation{},
 						ServiceAccountKey:      &core.ServiceAccountKeyRotation{},
@@ -157,36 +144,6 @@ var _ = Describe("Warnings", func() {
 					func(rotation *core.ShootCredentialsRotation) {
 						rotation.ETCDEncryptionKey.LastInitiationFinishedTime = &metav1.Time{Time: time.Now().Add(-credentialsRotationInterval / 2)}
 						rotation.ETCDEncryptionKey.LastCompletionTriggeredTime = &metav1.Time{Time: time.Now().Add(-credentialsRotationInterval / 3)}
-					},
-				),
-
-				Entry("kubeconfig nil", ContainElement(ContainSubstring("you should consider rotating the static token kubeconfig")),
-					func(shoot *core.Shoot) {
-						shoot.Spec.Kubernetes.EnableStaticTokenKubeconfig = ptr.To(true)
-					},
-					func(rotation *core.ShootCredentialsRotation) {
-						rotation.Kubeconfig = nil
-					},
-				),
-				Entry("kubeconfig last initiated too long ago", ContainElement(ContainSubstring("you should consider rotating the static token kubeconfig")),
-					func(shoot *core.Shoot) {
-						shoot.Spec.Kubernetes.EnableStaticTokenKubeconfig = ptr.To(true)
-					},
-					func(rotation *core.ShootCredentialsRotation) {
-						rotation.Kubeconfig.LastInitiationTime = &metav1.Time{Time: time.Now().Add(-credentialsRotationInterval * 2)}
-					},
-				),
-				Entry("kubeconfig last initiated too long ago but disabled", Not(ContainElement(ContainSubstring("you should consider rotating the static token kubeconfig"))),
-					func(shoot *core.Shoot) {
-						shoot.Spec.Kubernetes.EnableStaticTokenKubeconfig = ptr.To(false)
-					},
-					func(rotation *core.ShootCredentialsRotation) {
-						rotation.Kubeconfig.LastInitiationTime = &metav1.Time{Time: time.Now().Add(-credentialsRotationInterval * 2)}
-					},
-				),
-				Entry("kubeconfig last initiated not too long ago", Not(ContainElement(ContainSubstring("you should consider rotating the static token kubeconfig"))), nil,
-					func(rotation *core.ShootCredentialsRotation) {
-						rotation.Kubeconfig.LastInitiationTime = &metav1.Time{Time: time.Now().Add(-credentialsRotationInterval / 2)}
 					},
 				),
 
@@ -288,6 +245,22 @@ var _ = Describe("Warnings", func() {
 				PodEvictionTimeout: &metav1.Duration{Duration: 2 * time.Minute},
 			}
 			Expect(GetWarnings(ctx, shoot, nil, credentialsRotationInterval)).To(ContainElement(Equal("you are setting the spec.kubernetes.kubeControllerManager.podEvictionTimeout field. The field does not have effect since Kubernetes 1.13. Instead, use the spec.kubernetes.kubeAPIServer.(defaultNotReadyTolerationSeconds/defaultUnreachableTolerationSeconds) fields.")))
+		})
+
+		Context("shoot.gardener.cloud/managed-seed-api-server annotation", func() {
+			It("should not return a warning when the annotation is set but namespace is not garden", func() {
+				metav1.SetMetaDataAnnotation(&shoot.ObjectMeta, "shoot.gardener.cloud/managed-seed-api-server", "apiServer.replicas=3,apiServer.autoscaler.maxReplicas=6,apiServer.autoscaler.minReplicas=3")
+				shoot.Namespace = "garden-dev"
+
+				Expect(GetWarnings(ctx, shoot, nil, credentialsRotationInterval)).NotTo(ContainElement(ContainSubstring("shoot.gardener.cloud/managed-seed-api-server")))
+			})
+
+			It("should return a warning when the annotation is set and namespace is garden", func() {
+				metav1.SetMetaDataAnnotation(&shoot.ObjectMeta, "shoot.gardener.cloud/managed-seed-api-server", "apiServer.replicas=3,apiServer.autoscaler.maxReplicas=6,apiServer.autoscaler.minReplicas=3")
+				shoot.Namespace = "garden"
+
+				Expect(GetWarnings(ctx, shoot, nil, credentialsRotationInterval)).To(ContainElement(Equal("annotation 'shoot.gardener.cloud/managed-seed-api-server' is deprecated, instead consider enabling high availability for the ManagedSeed's Shoot control plane")))
+			})
 		})
 	})
 })

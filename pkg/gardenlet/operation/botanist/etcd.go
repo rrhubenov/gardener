@@ -44,8 +44,7 @@ func (b *Botanist) DefaultEtcd(role string, class etcd.Class) (etcd.Interface, e
 	e := NewEtcd(
 		b.Logger,
 		b.SeedClientSet.Client(),
-		b.SeedClientSet.APIReader(),
-		b.Shoot.SeedNamespace,
+		b.Shoot.ControlPlaneNamespace,
 		b.SecretsManager,
 		etcd.Values{
 			Role:                        role,
@@ -54,7 +53,6 @@ func (b *Botanist) DefaultEtcd(role string, class etcd.Class) (etcd.Interface, e
 			StorageCapacity:             b.Seed.GetValidVolumeSize("10Gi"),
 			DefragmentationSchedule:     &defragmentationSchedule,
 			CARotationPhase:             v1beta1helper.GetShootCARotationPhase(b.Shoot.GetInfo().Status.Credentials),
-			RuntimeKubernetesVersion:    b.Seed.KubernetesVersion,
 			MaintenanceTimeWindow:       *b.Shoot.GetInfo().Spec.Maintenance.TimeWindow,
 			EvictionRequirement:         getEvictionRequirement(class, b.Shoot),
 			PriorityClassName:           v1beta1constants.PriorityClassNameShootControlPlane500,
@@ -80,7 +78,7 @@ func getEvictionRequirement(c etcd.Class, s *shoot.Shoot) *string {
 func (b *Botanist) DeployEtcd(ctx context.Context) error {
 	if b.Seed.GetInfo().Spec.Backup != nil {
 		secret := &corev1.Secret{}
-		if err := b.SeedClientSet.Client().Get(ctx, client.ObjectKey{Namespace: b.Shoot.SeedNamespace, Name: v1beta1constants.BackupSecretName}, secret); err != nil {
+		if err := b.SeedClientSet.Client().Get(ctx, client.ObjectKey{Namespace: b.Shoot.ControlPlaneNamespace, Name: v1beta1constants.BackupSecretName}, secret); err != nil {
 			return err
 		}
 

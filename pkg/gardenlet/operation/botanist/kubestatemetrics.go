@@ -23,11 +23,10 @@ func (b *Botanist) DefaultKubeStateMetrics() (component.DeployWaiter, error) {
 
 	return kubestatemetrics.New(
 		b.SeedClientSet.Client(),
-		b.Shoot.SeedNamespace,
+		b.Shoot.ControlPlaneNamespace,
 		b.SecretsManager,
 		kubestatemetrics.Values{
 			ClusterType:       component.ClusterTypeShoot,
-			KubernetesVersion: b.Shoot.KubernetesVersion,
 			Image:             image.String(),
 			PriorityClassName: v1beta1constants.PriorityClassNameShootControlPlane100,
 			Replicas:          b.Shoot.GetReplicas(1),

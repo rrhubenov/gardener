@@ -89,14 +89,11 @@ var _ = Describe("Etcd", func() {
 			botanist.SeedClientSet = kubernetesClient
 			botanist.Seed = &seedpkg.Seed{}
 			botanist.Shoot = &shootpkg.Shoot{
-				SeedNamespace: namespace,
+				ControlPlaneNamespace: namespace,
 			}
 			botanist.Seed.SetInfo(&gardencorev1beta1.Seed{})
 			botanist.Shoot.SetInfo(&gardencorev1beta1.Shoot{
 				Spec: gardencorev1beta1.ShootSpec{
-					Kubernetes: gardencorev1beta1.Kubernetes{
-						Version: "1.25.2",
-					},
 					Maintenance: &gardencorev1beta1.Maintenance{
 						TimeWindow: &maintenanceTimeWindow,
 					},
@@ -120,7 +117,6 @@ var _ = Describe("Etcd", func() {
 
 						validator := &newEtcdValidator{
 							expectedClient:                  Equal(c),
-							expectedReader:                  Equal(reader),
 							expectedLogger:                  BeAssignableToTypeOf(logr.Logger{}),
 							expectedNamespace:               Equal(namespace),
 							expectedSecretsManager:          Equal(sm),
@@ -153,7 +149,6 @@ var _ = Describe("Etcd", func() {
 			It("should successfully create an etcd interface (normal class)", func() {
 				validator := &newEtcdValidator{
 					expectedClient:                  Equal(c),
-					expectedReader:                  Equal(reader),
 					expectedLogger:                  BeAssignableToTypeOf(logr.Logger{}),
 					expectedNamespace:               Equal(namespace),
 					expectedSecretsManager:          Equal(sm),
@@ -180,7 +175,6 @@ var _ = Describe("Etcd", func() {
 
 				validator := &newEtcdValidator{
 					expectedClient:                  Equal(c),
-					expectedReader:                  Equal(reader),
 					expectedLogger:                  BeAssignableToTypeOf(logr.Logger{}),
 					expectedNamespace:               Equal(namespace),
 					expectedSecretsManager:          Equal(sm),
@@ -233,7 +227,7 @@ var _ = Describe("Etcd", func() {
 						EtcdEvents: etcdEvents,
 					},
 				},
-				SeedNamespace:         namespace,
+				ControlPlaneNamespace: namespace,
 				BackupEntryName:       namespace + "--" + string(shootUID),
 				InternalClusterDomain: "internal.example.com",
 			}
@@ -503,7 +497,6 @@ type newEtcdValidator struct {
 	etcd.Interface
 
 	expectedClient                  gomegatypes.GomegaMatcher
-	expectedReader                  gomegatypes.GomegaMatcher
 	expectedLogger                  gomegatypes.GomegaMatcher
 	expectedNamespace               gomegatypes.GomegaMatcher
 	expectedSecretsManager          gomegatypes.GomegaMatcher
@@ -519,14 +512,12 @@ type newEtcdValidator struct {
 func (v *newEtcdValidator) NewEtcd(
 	log logr.Logger,
 	client client.Client,
-	reader client.Reader,
 	namespace string,
 	secretsManager secretsmanager.Interface,
 	values etcd.Values,
 ) etcd.Interface {
 	Expect(log).To(v.expectedLogger)
 	Expect(client).To(v.expectedClient)
-	Expect(reader).To(v.expectedReader)
 	Expect(namespace).To(v.expectedNamespace)
 	Expect(secretsManager).To(v.expectedSecretsManager)
 	Expect(values.Role).To(v.expectedRole)
