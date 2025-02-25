@@ -8,7 +8,7 @@ import (
 	"context"
 	"time"
 
-	otelv1alpha1 "github.com/open-telemetry/opentelemetry-operator/apis/v1alpha1"
+	otelv1beta1 "github.com/open-telemetry/opentelemetry-operator/apis/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -53,27 +53,40 @@ func New(
 func (f *otelCollector) Deploy(ctx context.Context) error {
 	var (
 		registry  = managedresources.NewRegistry(kubernetes.SeedScheme, kubernetes.SeedCodec, kubernetes.SeedSerializer)
-		collector = &otelv1alpha1.OpenTelemetryCollector{
+		collector = &otelv1beta1.OpenTelemetryCollector{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      v1beta1constants.DeploymentNameOpenTelemetryCollector,
 				Namespace: f.namespace,
 			},
-			Spec: otelv1alpha1.OpenTelemetryCollectorSpec{
-				Mode: "deployment",
-				Config: `receivers:
-						otlp:
-						  protocols:
-						    grpc:
-						    http:
-					    exporters:
-					      debug:
-
-					    service:
-					      pipelines:
-					        traces:
-						  receivers: [otlp]
-						  processors: []
-						  exporters: [debug]`,
+			Spec: otelv1beta1.OpenTelemetryCollectorSpec{
+				Mode:            "deployment",
+				UpgradeStrategy: "none",
+				Config: otelv1beta1.Config{
+					Receivers: otelv1beta1.AnyConfig{
+						Object: map[string]interface{}{
+							"otlp": map[string]interface{}{
+								"protocols": map[string]interface{}{
+									"grpc": map[string]interface{}{
+										"endpoint": "0.0.0.0:4317",
+									},
+								},
+							},
+						},
+					},
+					Exporters: otelv1beta1.AnyConfig{
+						Object: map[string]interface{}{
+							"debug": map[string]interface{}{},
+						},
+					},
+					Service: otelv1beta1.Service{
+						Pipelines: map[string]*otelv1beta1.Pipeline{
+							"traces": {
+								Exporters: []string{"debug"},
+								Receivers: []string{"otlp"},
+							},
+						},
+					},
+				},
 			},
 		}
 	)
