@@ -724,6 +724,8 @@ const (
 	OperatingSystemConfigFilePathValitailConfig = "/var/lib/valitail/config/config"
 	// OperatingSystemConfigFilePathBinaries is a constant for a path to a directory in the operating system config that contains the binaries.
 	OperatingSystemConfigFilePathBinaries = "/opt/bin"
+	// OperatingSystemConfigFilePathOpenTelemetryCollector is a constant for a path to a file in the operating system config that contains the opentelemetry collector configuration.
+	OperatingSystemConfigFilePathOpenTelemetryCollector = "/var/lib/opentelemetrycollector/config/config"
 
 	// FluentBitConfigMapKubernetesFilter is a constant for the Fluent Bit ConfigMap's section regarding Kubernetes filters
 	FluentBitConfigMapKubernetesFilter = "filter-kubernetes.conf"
