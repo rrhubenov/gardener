@@ -15,7 +15,7 @@ import (
 
 const (
 	// UnitName is the name of the opentelemetry-collector service.
-	UnitName = v1beta1constants.OperatingSystemConfigUnitNameValitailService
+	UnitName = v1beta1constants.OperatingSystemConfigUnitNameOpenTelemetryCollector
 
 	// PathDirectory is the path for the opentelemetry-collector's directory.
 	PathDirectory = "/var/lib/opentelemetry-collector"
@@ -59,8 +59,9 @@ func (component) Config(ctx components.Context) ([]extensionsv1alpha1.Unit, []ex
 			Permissions: ptr.To[uint32](0755),
 			Content: extensionsv1alpha1.FileContent{
 				ImageRef: &extensionsv1alpha1.FileContentImageRef{
-					Image:           ctx.Images[imagevector.ContainerImageNameValitail].String(),
-					FilePathInImage: "/usr/bin/opentelemetry-collector",
+					Image: ctx.Images[imagevector.ContainerImageNameOpentelemetryCollector].String(),
+					// TODO(rado): Update value to the actual otel binary in the container
+					FilePathInImage: "/usr/bin/valitail",
 				},
 			},
 		})
