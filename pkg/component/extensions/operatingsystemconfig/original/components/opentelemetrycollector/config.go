@@ -24,6 +24,8 @@ var (
 	//go:embed templates/opentelemetry-collector-config.yaml.tpl
 	tplContentOpenTelemetryCollector string
 	tplOpenTelemetryCollector        *template.Template
+
+	shootComponents = []string{"apiserver-proxy", "blackbox-exporter", "calico-node", "calico-typha", "coredns", "egress-filter-applier", "kube-proxy-worker", "kube-proxy-worker", "metrics-server", "network-problem-detector-host", "network-problem-detector-pod", "node-exporter", "node-problem-detector", "vpn-shoot"}
 )
 
 func init() {
@@ -38,20 +40,13 @@ func getOpentelemetryCollectorConfigurationFile(ctx components.Context) (extensi
 		return extensionsv1alpha1.File{}, errors.New("opentelemetry-collector ingress url is missing")
 	}
 
-	// apiServerURL, err := url.Parse(ctx.APIServerURL)
-	// if err != nil {
-	// 	return extensionsv1alpha1.File{}, err
-	// }
-
 	var config bytes.Buffer
-	// TODO(rado): Include fields
 	if err := tplOpenTelemetryCollector.Execute(&config, map[string]any{
-		// "clientURL":         "https://" + ctx.ValiIngress + "/vali/api/v1/push",
-		// "pathCACert":        PathCACert,
-		// "valiIngress":       ctx.ValiIngress,
-		// "pathAuthToken":     PathAuthToken,
-		// "APIServerURL":      ctx.APIServerURL,
-		// "APIServerHostname": apiServerURL.Hostname(),
+		"clientURL":       "https://" + ctx.ValiIngress + "/vali/api/v1/push",
+		"pathCACert":      PathCACert,
+		"valiIngress":     ctx.ValiIngress,
+		"pathAuthToken":   PathAuthToken,
+		"shootComponents": shootComponents,
 	}); err != nil {
 		return extensionsv1alpha1.File{}, err
 	}
@@ -109,7 +104,7 @@ Restart=always
 RestartSec=5
 EnvironmentFile=/etc/environment
 ExecStartPre=/bin/sh -c "systemctl set-environment HOSTNAME=$(hostname | tr [:upper:] [:lower:])"
-ExecStart=` + v1beta1constants.OperatingSystemConfigFilePathBinaries + `/opentelemetry-collector -config.file=` + PathConfig),
+ExecStart=` + v1beta1constants.OperatingSystemConfigFilePathBinaries + `/opentelemetry-collector --config=` + PathConfig),
 		FilePaths: []string{PathConfig, PathCACert, opentelemetryCollectorBinaryPath},
 	}
 }

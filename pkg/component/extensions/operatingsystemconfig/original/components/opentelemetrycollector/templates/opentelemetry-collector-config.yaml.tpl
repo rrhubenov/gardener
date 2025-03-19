@@ -1,13 +1,15 @@
 extensions:
   file_storage:
     directory: /var/log/otelcol
+    create_directory: true
 
 receivers:
   journald/journal:
+    start_at: beginning
     storage: file_storage
 
   filelog/pods:
-    include: [/var/log/pods/kube-system_*/*/*.log]
+    include: [{{range .shootComponents}}/var/log/pods/kube-system_{{.}}*/*/*.log,{{end}}]
     storage: file_storage
     include_file_path: true
     operators:
@@ -19,27 +21,50 @@ processors:
   batch:
     timeout: 10s
 
+  resourcedetection/system:
+    detectors: ["system"]
+    system:
+      hostname_sources: ["os"]
+
   filter/drop_localhost_journal:
     logs:
       exclude:
         match_type: strict
-        attributes:
+        resource_attributes:
           - key: _HOSTNAME
             value: localhost
 
   filter/keep_units_journal:
     logs:
       include:
-        match_type: expr
-        expressions:
-          - 'attributes["SYSLOG_IDENTIFIER"] == "kernel" or attributes["_SYSTEMD_UNIT"] in ["kubelet.service", "docker.service", "containerd.service", "gardener-node-agent.service"]'
+        match_type: strict
+        resource_attributes:
+          - key: SYSLOG_IDENTIFIER
+            value: kernel
+          - key: _SYSTEMD_UNIT
+            value: kubelet.service
+          - key: _SYSTEMD_UNIT
+            value: docker.service
+          - key: _SYSTEMD_UNIT
+            value: containerd.service
+          - key: _SYSTEMD_UNIT
+            value: gardener-node-agent.service
 
   filter/drop_units_combine:
     logs:
       exclude:
-        match_type: expr
-        expressions:
-          - 'attributes["SYSLOG_IDENTIFIER"] == "kernel" or attributes["_SYSTEMD_UNIT"] in ["kubelet.service", "docker.service", "containerd.service", "gardener-node-agent.service"]'
+        match_type: strict
+        resource_attributes:
+          - key: SYSLOG_IDENTIFIER
+            value: kernel
+          - key: _SYSTEMD_UNIT
+            value: kubelet.service
+          - key: _SYSTEMD_UNIT
+            value: docker.service
+          - key: _SYSTEMD_UNIT
+            value: containerd.service
+          - key: _SYSTEMD_UNIT
+            value: gardener-node-agent.service
 
   attributes/journal_labels:
     actions:
@@ -77,47 +102,13 @@ processors:
         key: origin
         value: systemd-journal
 
-  k8sattributes:
-    auth_type: serviceAccount
-    api_config:
-      kube_config: {{ .APIServerURL }}
-    pod_association:
-      - sources:
-          - from: resource_attribute
-            name: k8s.pod.uid
-    extract:
-      metadata:
-        - k8s.namespace.name
-        - k8s.pod.name
-        - k8s.pod.labels
-        - k8s.pod.node.name
-      labels:
-        - key: gardener.cloud/role
-        - key: origin
-        - key: resources.gardener.cloud/managed-by
-
-  filter/pod_drop_empty:
-    logs:
-      exclude:
-        match_type: expr
-        expressions:
-          - 'resource["k8s.pod.labels.gardener.cloud/role"] == nil and resource["k8s.pod.labels.origin"] == nil and resource["k8s.pod.labels.resources.gardener.cloud/managed-by"] == nil'
-
-  attributes/pod_labels:
-    actions:
-      - key: resource["k8s.pod.labels.origin"]
-        value: "gardener"
-        action: upsert
-        if: 'resource["k8s.pod.labels.gardener.cloud/role"] != nil or resource["k8s.pod.labels.resources.gardener.cloud/managed-by"] == "gardener"'
-      - key: resource["k8s.pod.labels.gardener.cloud/role"]
-        value: "default"
-        action: upsert
-        if: 'resource["k8s.pod.labels.gardener.cloud/role"] == nil'
+  resource/pod_labels:
+    attributes:
       - key: nodename
         from_attribute: k8s.pod.node.name
         action: insert
       - key: namespace_name
-        from_attribute: k8s.namespace.name
+        value: "kube-system"
         action: insert
       - key: pod_name
         from_attribute: k8s.pod.name
@@ -125,29 +116,31 @@ processors:
       - key: container_name
         from_attribute: k8s.container.name
         action: insert
-      - key: gardener_cloud_role
-        from_attribute: k8s.pod.labels.gardener.cloud/role
-        action: insert
       - key: origin
         value: "shoot_system"
+        action: upsert
+      - key: loki.resource.labels
+        value: pod_name
         action: upsert
 
   filter/keep_gardener:
     logs:
       include:
         match_type: strict
-        attributes:
+        resource_attributes:
           - key: resource["k8s.pod.labels.origin"]
             value: "gardener"
 
 exporters:
-  otlphttp:
+  loki:
     endpoint: {{ .clientURL }}
     headers:
       Authorization: "Bearer ${file:{{ .pathAuthToken }}}"
     tls:
       ca_file: {{ .pathCACert }}
-      server_name: {{ .valiIngress }}
+
+  debug:
+    verbosity: detailed
 
 service:
   extensions: [file_storage]
@@ -155,12 +148,12 @@ service:
     logs/journal:
       receivers: [journald/journal]
       processors: [filter/drop_localhost_journal, filter/keep_units_journal, attributes/journal_labels, resource/journal, batch]
-      exporters: [otlphttp]
+      exporters: [loki]
     logs/combine_journal:
       receivers: [journald/journal]
       processors: [filter/drop_localhost_journal, filter/drop_units_combine, attributes/combine_labels, resource/combine_journal, batch]
-      exporters: [otlphttp]
+      exporters: [loki]
     logs/pods:
       receivers: [filelog/pods]
-      processors: [k8sattributes, filter/pod_drop_empty, attributes/pod_labels, filter/keep_gardener, batch]
-      exporters: [otlphttp]
+      processors: [resourcedetection/system, resource/pod_labels]
+      exporters: [loki, debug]

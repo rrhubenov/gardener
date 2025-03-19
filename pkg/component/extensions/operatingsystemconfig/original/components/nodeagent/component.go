@@ -22,6 +22,7 @@ import (
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	extensionsv1alpha1helper "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1/helper"
 	"github.com/gardener/gardener/pkg/component/extensions/operatingsystemconfig/original/components"
+	"github.com/gardener/gardener/pkg/component/extensions/operatingsystemconfig/original/components/opentelemetrycollector"
 	"github.com/gardener/gardener/pkg/component/extensions/operatingsystemconfig/original/components/valitail"
 	valiconstants "github.com/gardener/gardener/pkg/component/observability/logging/vali/constants"
 	"github.com/gardener/gardener/pkg/features"
@@ -68,6 +69,11 @@ func (component) Config(ctx components.Context) ([]extensionsv1alpha1.Unit, []ex
 			Path:       valitail.PathAuthToken,
 		})
 	}
+	additionalTokenSyncConfigs = append(additionalTokenSyncConfigs, nodeagentconfigv1alpha1.TokenSecretSyncConfig{
+		// TODO(rado): Replace with otelcollector constants. Currently setup like this for the prototype.
+		SecretName: valiconstants.ValitailTokenSecretName,
+		Path:       opentelemetrycollector.PathAuthToken,
+	})
 
 	files, err := Files(ComponentConfig(ctx.Key, ctx.KubernetesVersion, ctx.APIServerURL, caBundle, additionalTokenSyncConfigs))
 	if err != nil {
