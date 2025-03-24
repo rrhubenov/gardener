@@ -25,7 +25,7 @@ var (
 	tplContentOpenTelemetryCollector string
 	tplOpenTelemetryCollector        *template.Template
 
-	shootComponents = []string{"apiserver-proxy", "blackbox-exporter", "calico-node", "calico-typha", "coredns", "egress-filter-applier", "kube-proxy-worker", "kube-proxy-worker", "metrics-server", "network-problem-detector-host", "network-problem-detector-pod", "node-exporter", "node-problem-detector", "vpn-shoot"}
+	ShootComponents = []string{"apiserver-proxy", "blackbox-exporter", "calico-node", "calico-typha", "coredns", "egress-filter-applier", "kube-proxy-worker", "kube-proxy-worker", "metrics-server", "network-problem-detector-host", "network-problem-detector-pod", "node-exporter", "node-problem-detector", "vpn-shoot"}
 )
 
 func init() {
@@ -46,7 +46,7 @@ func getOpentelemetryCollectorConfigurationFile(ctx components.Context) (extensi
 		"pathCACert":      PathCACert,
 		"valiIngress":     ctx.ValiIngress,
 		"pathAuthToken":   PathAuthToken,
-		"shootComponents": shootComponents,
+		"shootComponents": ShootComponents,
 	}); err != nil {
 		return extensionsv1alpha1.File{}, err
 	}

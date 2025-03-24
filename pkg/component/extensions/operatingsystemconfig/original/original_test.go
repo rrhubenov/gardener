@@ -113,6 +113,7 @@ var _ = Describe("Original", func() {
 				"kubelet",
 				"sshd-ensurer",
 				"gardener-node-agent",
+				"opentelemetry-collector",
 				"gardener-user",
 			}))
 		})
@@ -134,6 +135,7 @@ var _ = Describe("Original", func() {
 				"kubelet",
 				"sshd-ensurer",
 				"gardener-node-agent",
+				"opentelemetry-collector",
 			}))
 		})
 	})
