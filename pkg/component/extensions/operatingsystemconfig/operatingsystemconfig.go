@@ -827,6 +827,7 @@ type deployer struct {
 	sshAccessEnabled                            bool
 	valiIngressHostName                         string
 	valitailEnabled                             bool
+	otelCollectorEnabled                        bool
 	nodeLocalDNSEnabled                         bool
 	nodeMonitorGracePeriod                      metav1.Duration
 	primaryIPFamily                             gardencorev1beta1.IPFamily
@@ -868,6 +869,7 @@ func (d *deployer) deploy(ctx context.Context, operation string) (extensionsv1al
 		SSHPublicKeys:           d.sshPublicKeys,
 		SSHAccessEnabled:        d.sshAccessEnabled,
 		ValitailEnabled:         d.valitailEnabled,
+		OtelCollectorEnabled:    d.otelCollectorEnabled,
 		ValiIngress:             d.valiIngressHostName,
 		APIServerURL:            d.apiServerURL,
 		Sysctls:                 d.worker.Sysctls,

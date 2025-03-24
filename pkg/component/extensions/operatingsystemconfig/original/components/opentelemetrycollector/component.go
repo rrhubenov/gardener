@@ -24,7 +24,7 @@ const (
 	PathAuthToken = PathDirectory + "/auth-token"
 	// PathConfig is the path for the opentelemetry-collector's configuration file.
 	PathConfig = v1beta1constants.OperatingSystemConfigFilePathOpenTelemetryCollector
-	// PathCACert is the path for the vali-tls certificate authority.
+	// PathCACert is the path for the otelCollector-tls certificate authority.
 	PathCACert = PathDirectory + "/ca.crt"
 
 	opentelemetryCollectorBinaryPath = v1beta1constants.OperatingSystemConfigFilePathBinaries + "/opentelemetry-collector"
@@ -47,7 +47,7 @@ func (component) Config(ctx components.Context) ([]extensionsv1alpha1.Unit, []ex
 		files []extensionsv1alpha1.File
 	)
 
-	if ctx.ValitailEnabled {
+	if ctx.OtelCollectorEnabled {
 		collectorConfigFile, err := getOpentelemetryCollectorConfigurationFile(ctx)
 		if err != nil {
 			return nil, nil, err

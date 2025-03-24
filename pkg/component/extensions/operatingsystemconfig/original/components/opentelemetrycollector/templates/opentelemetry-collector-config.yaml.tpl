@@ -7,6 +7,16 @@ receivers:
   journald/journal:
     start_at: beginning
     storage: file_storage
+    operators:
+      - type: move
+        from: body.SYSLOG_IDENTIFIER
+        to: resource.unit
+      - type: move
+        from: body._HOSTNAME
+        to: resource.nodename
+      - type: retain
+        fields:
+          - body.MESSAGE
 
   filelog/pods:
     include: [{{range .shootComponents}}/var/log/pods/kube-system_{{.}}*/*/*.log,{{end}}]
@@ -66,46 +76,22 @@ processors:
           - key: _SYSTEMD_UNIT
             value: gardener-node-agent.service
 
-  attributes/journal_labels:
-    actions:
-      - key: unit
-        from_attribute: SYSLOG_IDENTIFIER
-        action: insert
-      - key: nodename
-        from_attribute: _HOSTNAME
-        action: insert
-
-  attributes/combine_labels:
-    actions:
-      - key: unit
-        from_attribute: SYSLOG_IDENTIFIER
-        action: insert
-      - key: nodename
-        from_attribute: _HOSTNAME
-        action: insert
-
   resource/journal:
     attributes:
       - action: insert
-        key: job
-        value: systemd-journal
-      - action: insert
         key: origin
         value: systemd-journal
-
-  resource/combine_journal:
-    attributes:
-      - action: insert
-        key: job
-        value: systemd-combine-journal
-      - action: insert
-        key: origin
-        value: systemd-journal
+      - key: loki.resource.labels
+        value: unit, nodename, origin
+        action: insert
+      - key: loki.format
+        value: logfmt
+        action: insert
 
   resource/pod_labels:
     attributes:
-      - key: nodename
-        from_attribute: k8s.pod.node.name
+      - key: origin
+        value: "shoot-system"
         action: insert
       - key: namespace_name
         value: "kube-system"
@@ -116,20 +102,12 @@ processors:
       - key: container_name
         from_attribute: k8s.container.name
         action: insert
-      - key: origin
-        value: "shoot_system"
-        action: upsert
       - key: loki.resource.labels
-        value: pod_name
-        action: upsert
-
-  filter/keep_gardener:
-    logs:
-      include:
-        match_type: strict
-        resource_attributes:
-          - key: resource["k8s.pod.labels.origin"]
-            value: "gardener"
+        value: pod_name, container_name, origin, namespace_name, nodename, host.name
+        action: insert
+      - key: loki.format
+        value: logfmt
+        action: insert
 
 exporters:
   loki:
@@ -147,13 +125,13 @@ service:
   pipelines:
     logs/journal:
       receivers: [journald/journal]
-      processors: [filter/drop_localhost_journal, filter/keep_units_journal, attributes/journal_labels, resource/journal, batch]
+      processors: [filter/drop_localhost_journal, filter/keep_units_journal, resource/journal, batch]
       exporters: [loki]
     logs/combine_journal:
       receivers: [journald/journal]
-      processors: [filter/drop_localhost_journal, filter/drop_units_combine, attributes/combine_labels, resource/combine_journal, batch]
+      processors: [filter/drop_localhost_journal, filter/drop_units_combine, resource/journal, batch]
       exporters: [loki]
     logs/pods:
       receivers: [filelog/pods]
-      processors: [resourcedetection/system, resource/pod_labels]
+      processors: [resourcedetection/system, resource/pod_labels, batch]
       exporters: [loki, debug]

@@ -41,6 +41,7 @@ type Context struct {
 	SSHAccessEnabled        bool
 	ValiIngress             string
 	ValitailEnabled         bool
+	OtelCollectorEnabled    bool
 	APIServerURL            string
 	Sysctls                 map[string]string
 	PreferIPv6              bool
