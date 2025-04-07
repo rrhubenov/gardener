@@ -108,6 +108,7 @@ case $TYPE in
       e2e-auth-one.local
       e2e-auth-two.local
       e2e-layer4-lb.local
+      e2e-observ.local
     )
 
     ingress_names=(
