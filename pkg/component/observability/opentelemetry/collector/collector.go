@@ -32,9 +32,10 @@ type Values struct {
 }
 
 type otelCollector struct {
-	client    client.Client
-	namespace string
-	values    Values
+	client       client.Client
+	namespace    string
+	values       Values
+	lokiEndpoint string
 }
 
 // New creates a new instance of otel-collector deployer.
@@ -42,18 +43,20 @@ func New(
 	client client.Client,
 	namespace string,
 	values Values,
+	lokiEndpoint string,
 ) component.DeployWaiter {
 	return &otelCollector{
-		client:    client,
-		namespace: namespace,
-		values:    values,
+		client:       client,
+		namespace:    namespace,
+		values:       values,
+		lokiEndpoint: lokiEndpoint,
 	}
 }
 
 func (f *otelCollector) Deploy(ctx context.Context) error {
 	var (
 		registry  = managedresources.NewRegistry(kubernetes.SeedScheme, kubernetes.SeedCodec, kubernetes.SeedSerializer)
-		collector = openTelemetryCollector(f.namespace)
+		collector = f.openTelemetryCollector(f.namespace, f.lokiEndpoint)
 	)
 
 	resources := []client.Object{collector}
@@ -86,22 +89,59 @@ func (f *otelCollector) WaitCleanup(ctx context.Context) error {
 	return managedresources.WaitUntilDeleted(timeoutCtx, f.client, f.namespace, managedResourceName)
 }
 
-func openTelemetryCollector(namespace string) *otelv1beta1.OpenTelemetryCollector {
-	return &otelv1beta1.OpenTelemetryCollector{
+func (f *otelCollector) openTelemetryCollector(namespace, lokiEndpoint string) *otelv1beta1.OpenTelemetryCollector {
+	obj := &otelv1beta1.OpenTelemetryCollector{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      v1beta1constants.DeploymentNameOpenTelemetryCollector,
 			Namespace: namespace,
+			Labels:    getLabels(),
 		},
 		Spec: otelv1beta1.OpenTelemetryCollectorSpec{
 			Mode:            "deployment",
 			UpgradeStrategy: "none",
+			OpenTelemetryCommonFields: otelv1beta1.OpenTelemetryCommonFields{
+				Image: "docker.io/otel/opentelemetry-collector-contrib:0.115.1",
+			},
 			Config: otelv1beta1.Config{
 				Receivers: otelv1beta1.AnyConfig{
 					Object: map[string]interface{}{
-						"otlp": map[string]interface{}{
+						"loki": map[string]interface{}{
 							"protocols": map[string]interface{}{
-								"grpc": map[string]interface{}{
+								"http": map[string]interface{}{
 									"endpoint": "0.0.0.0:4317",
+								},
+							},
+						},
+					},
+				},
+				//resource/journal:
+				// attributes:
+				//   - action: insert
+				//     key: origin
+				//     value: systemd-journal
+				//   - key: loki.resource.labels
+				//     value: unit, nodename, origin
+				//     action: insert
+				//   - key: loki.format
+				//     value: logfmt
+				//     action: insert
+				//
+				Processors: &otelv1beta1.AnyConfig{
+					Object: map[string]interface{}{
+						"batch": map[string]interface{}{
+							"timeout": "10s",
+						},
+						"resource/labels": map[string]interface{}{
+							"attributes": []map[string]interface{}{
+								{
+									"key":    "loki.resource.labels",
+									"value":  "unit, nodename, origin, pod_name, container_name, origin, namespace_name, nodename, gardener_cloud_role",
+									"action": "insert",
+								},
+								{
+									"key":    "loki.format",
+									"value":  "logfmt",
+									"action": "insert",
 								},
 							},
 						},
@@ -109,36 +149,46 @@ func openTelemetryCollector(namespace string) *otelv1beta1.OpenTelemetryCollecto
 				},
 				Exporters: otelv1beta1.AnyConfig{
 					Object: map[string]interface{}{
-						"debug": map[string]interface{}{},
+						"debug": map[string]interface{}{
+							"verbosity": "detailed",
+						},
+						"loki": map[string]interface{}{
+							"endpoint": lokiEndpoint,
+						},
 					},
 				},
 				Service: otelv1beta1.Service{
 					Pipelines: map[string]*otelv1beta1.Pipeline{
-						"traces": {
-							Exporters: []string{"debug"},
-							Receivers: []string{"otlp"},
+						"logs": {
+							Exporters:  []string{"debug", "loki"},
+							Receivers:  []string{"loki"},
+							Processors: []string{"resource/labels", "batch"},
+						},
+					},
+					Telemetry: &otelv1beta1.AnyConfig{
+						Object: map[string]interface{}{
+							"logs": map[string]interface{}{
+								"level": "debug",
+							},
 						},
 					},
 				},
 			},
 		},
 	}
+
+	// utilruntime.Must(references.InjectAnnotations(obj))
+	return obj
 }
 
 func getLabels() map[string]string {
 	return map[string]string{
-		v1beta1constants.LabelApp:                             v1beta1constants.DaemonSetNameFluentBit,
-		v1beta1constants.LabelRole:                            v1beta1constants.LabelLogging,
-		v1beta1constants.GardenRole:                           v1beta1constants.GardenRoleLogging,
-		v1beta1constants.LabelNetworkPolicyToDNS:              v1beta1constants.LabelNetworkPolicyAllowed,
-		v1beta1constants.LabelNetworkPolicyToRuntimeAPIServer: v1beta1constants.LabelNetworkPolicyAllowed,
+		v1beta1constants.LabelRole:  v1beta1constants.LabelLogging,
+		v1beta1constants.GardenRole: v1beta1constants.GardenRoleLogging,
 		gardenerutils.NetworkPolicyLabel(valiconstants.ServiceName, valiconstants.ValiPort): v1beta1constants.LabelNetworkPolicyAllowed,
 		"networking.resources.gardener.cloud/to-all-shoots-logging-tcp-3100":                v1beta1constants.LabelNetworkPolicyAllowed,
-	}
-}
-
-func getCustomResourcesLabels() map[string]string {
-	return map[string]string{
-		v1beta1constants.LabelKeyCustomLoggingResource: v1beta1constants.LabelValueCustomLoggingResource,
+		"networking.gardener.cloud/to-dns":                                                  v1beta1constants.LabelNetworkPolicyAllowed,
+		"networking.gardener.cloud/to-runtime-apiserver":                                    v1beta1constants.LabelNetworkPolicyAllowed,
+		v1beta1constants.LabelObservabilityApplication:                                      "opentelemetry-collector",
 	}
 }

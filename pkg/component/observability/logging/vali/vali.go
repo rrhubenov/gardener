@@ -366,11 +366,12 @@ func (v *vali) getIngress(secretName string) *networkingv1.Ingress {
 						Paths: []networkingv1.HTTPIngressPath{{
 							Backend: networkingv1.IngressBackend{
 								Service: &networkingv1.IngressServiceBackend{
-									Name: valiServiceName,
-									Port: networkingv1.ServiceBackendPort{Number: kubeRBACProxyPort},
+									// TODO(Rado): Extract constants
+									Name: "opentelemetry-collector-collector",
+									Port: networkingv1.ServiceBackendPort{Number: 4317},
 								},
 							},
-							Path:     "/vali/api/v1/push",
+							Path:     "/loki/api/v1/push",
 							PathType: &pathType,
 						}},
 					},

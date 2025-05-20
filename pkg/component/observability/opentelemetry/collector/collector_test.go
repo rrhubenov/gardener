@@ -55,7 +55,8 @@ var _ = Describe("OpenTelemetry Collector", func() {
 
 	BeforeEach(func() {
 		c = fakeclient.NewClientBuilder().WithScheme(kubernetes.SeedScheme).Build()
-		component = New(c, namespace, values)
+		// TODO(Rado): Extract the 'logging' constant
+		component = New(c, namespace, values, "logging")
 		consistOf = NewManagedResourceConsistOfObjectsMatcher(c)
 	})
 
