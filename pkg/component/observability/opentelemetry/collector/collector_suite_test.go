@@ -11,7 +11,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-func TestFluentBit(t *testing.T) {
+func TestOpenTelemetryCollector(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Component Observability Logging FluentBit Suite")
+	RunSpecs(t, "Component Observability Logging OpenTelemetryCollector Suite")
 }

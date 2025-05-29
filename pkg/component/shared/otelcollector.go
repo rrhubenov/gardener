@@ -19,7 +19,9 @@ func NewOtelCollector(
 	component.DeployWaiter,
 	error,
 ) {
-	deployer := collector.New(c, namespace, collector.Values{Image: ""})
+	// TODO(Rado): Find where we can get the vali service endpoint from so that we're not hardcoding "logging"
+	// 3100 is for loki, 8080 is for the kube-rbac-proxy
+	deployer := collector.New(c, namespace, collector.Values{Image: ""}, "http://logging:3100/vali/api/v1/push")
 
 	return deployer, nil
 }
