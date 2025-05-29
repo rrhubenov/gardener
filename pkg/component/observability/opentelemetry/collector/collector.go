@@ -21,8 +21,8 @@ import (
 )
 
 const (
-	managedResourceName     = "otel-collector"
-	otelCollectorConfigName = "otel-collector-config"
+	managedResourceName     = "opentelemetry-collector"
+	otelCollectorConfigName = "opentelemetry-collector-config"
 )
 
 // Values is the values for otel-collector configurations
@@ -53,42 +53,7 @@ func New(
 func (f *otelCollector) Deploy(ctx context.Context) error {
 	var (
 		registry  = managedresources.NewRegistry(kubernetes.SeedScheme, kubernetes.SeedCodec, kubernetes.SeedSerializer)
-		collector = &otelv1beta1.OpenTelemetryCollector{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      v1beta1constants.DeploymentNameOpenTelemetryCollector,
-				Namespace: f.namespace,
-			},
-			Spec: otelv1beta1.OpenTelemetryCollectorSpec{
-				Mode:            "deployment",
-				UpgradeStrategy: "none",
-				Config: otelv1beta1.Config{
-					Receivers: otelv1beta1.AnyConfig{
-						Object: map[string]interface{}{
-							"otlp": map[string]interface{}{
-								"protocols": map[string]interface{}{
-									"grpc": map[string]interface{}{
-										"endpoint": "0.0.0.0:4317",
-									},
-								},
-							},
-						},
-					},
-					Exporters: otelv1beta1.AnyConfig{
-						Object: map[string]interface{}{
-							"debug": map[string]interface{}{},
-						},
-					},
-					Service: otelv1beta1.Service{
-						Pipelines: map[string]*otelv1beta1.Pipeline{
-							"traces": {
-								Exporters: []string{"debug"},
-								Receivers: []string{"otlp"},
-							},
-						},
-					},
-				},
-			},
-		}
+		collector = openTelemetryCollector(f.namespace)
 	)
 
 	resources := []client.Object{collector}
@@ -119,6 +84,45 @@ func (f *otelCollector) WaitCleanup(ctx context.Context) error {
 	defer cancel()
 
 	return managedresources.WaitUntilDeleted(timeoutCtx, f.client, f.namespace, managedResourceName)
+}
+
+func openTelemetryCollector(namespace string) *otelv1beta1.OpenTelemetryCollector {
+	return &otelv1beta1.OpenTelemetryCollector{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      v1beta1constants.DeploymentNameOpenTelemetryCollector,
+			Namespace: namespace,
+		},
+		Spec: otelv1beta1.OpenTelemetryCollectorSpec{
+			Mode:            "deployment",
+			UpgradeStrategy: "none",
+			Config: otelv1beta1.Config{
+				Receivers: otelv1beta1.AnyConfig{
+					Object: map[string]interface{}{
+						"otlp": map[string]interface{}{
+							"protocols": map[string]interface{}{
+								"grpc": map[string]interface{}{
+									"endpoint": "0.0.0.0:4317",
+								},
+							},
+						},
+					},
+				},
+				Exporters: otelv1beta1.AnyConfig{
+					Object: map[string]interface{}{
+						"debug": map[string]interface{}{},
+					},
+				},
+				Service: otelv1beta1.Service{
+					Pipelines: map[string]*otelv1beta1.Pipeline{
+						"traces": {
+							Exporters: []string{"debug"},
+							Receivers: []string{"otlp"},
+						},
+					},
+				},
+			},
+		},
+	}
 }
 
 func getLabels() map[string]string {
