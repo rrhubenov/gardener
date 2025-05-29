@@ -175,6 +175,10 @@ const (
 	// the opentelemetry-operator pod.
 	DeploymentNameOpenTelemetryOperator = "opentelemetry-operator"
 
+	// DeploymentNameOpenTelemetryCollector is a constant for the name of a Kubernetes deployment object that contains
+	// the opentelemetry-collector pod.
+	DeploymentNameOpenTelemetryCollector = "opentelemetry-collector"
+
 	// ConfigMapNameShootInfo is the name of a ConfigMap in the kube-system namespace of shoot clusters which contains
 	// information about the shoot cluster.
 	ConfigMapNameShootInfo = "shoot-info"

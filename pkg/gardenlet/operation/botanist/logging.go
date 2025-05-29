@@ -44,6 +44,12 @@ func (b *Botanist) DeployLogging(ctx context.Context) error {
 		return b.Shoot.Components.ControlPlane.Vali.Destroy(ctx)
 	}
 
+	if grmIsPresent {
+		if err := b.Shoot.Components.ControlPlane.OtelCollector.Deploy(ctx); err != nil {
+			return err
+		}
+	}
+
 	return b.Shoot.Components.ControlPlane.Vali.Deploy(ctx)
 }
 
@@ -104,4 +110,8 @@ func (b *Botanist) DefaultVali() (vali.Interface, error) {
 		nil,
 		b.ComputeValiHost(),
 	)
+}
+
+func (b *Botanist) DefaultOtelCollector() (component.DeployWaiter, error) {
+	return shared.NewOtelCollector(b.SeedClientSet.Client(), b.Shoot.ControlPlaneNamespace)
 }
