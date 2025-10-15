@@ -10,8 +10,11 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	gomegatypes "github.com/onsi/gomega/types"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -36,6 +39,9 @@ var _ = Describe("VictoriaOperator", func() {
 		managedResourceName = "victoria-operator"
 		namespace           = "some-namespace"
 
+		image             = "victoria-operator-image"
+		priorityClassName = "priority-class"
+
 		fakeClient client.Client
 		deployer   component.DeployWaiter
 		values     Values
@@ -47,6 +53,7 @@ var _ = Describe("VictoriaOperator", func() {
 		managedResourceSecret *corev1.Secret
 
 		serviceAccount *corev1.ServiceAccount
+		deployment     *appsv1.Deployment
 	)
 
 	BeforeEach(func() {
@@ -54,7 +61,10 @@ var _ = Describe("VictoriaOperator", func() {
 
 		fakeClient = fakeclient.NewClientBuilder().WithScheme(kubernetes.SeedScheme).Build()
 
-		values = Values{}
+		values = Values{
+			Image:             image,
+			PriorityClassName: priorityClassName,
+		}
 
 		fakeOps = &retryfake.Ops{MaxAttempts: 2}
 		DeferCleanup(test.WithVars(
@@ -85,6 +95,92 @@ var _ = Describe("VictoriaOperator", func() {
 			},
 			AutomountServiceAccountToken: ptr.To(false),
 		}
+
+		deployment = &appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "victoria-operator",
+				Namespace: namespace,
+				Labels:    map[string]string{"app": "victoria-operator"},
+			},
+			Spec: appsv1.DeploymentSpec{
+				Replicas:             ptr.To(int32(1)),
+				RevisionHistoryLimit: ptr.To(int32(2)),
+				Selector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{"app": "victoria-operator"},
+				},
+				Template: corev1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{
+						Labels: map[string]string{
+							"app":                              "victoria-operator",
+							"networking.gardener.cloud/to-dns": "allowed",
+							"networking.gardener.cloud/to-runtime-apiserver": "allowed",
+						},
+					},
+					Spec: corev1.PodSpec{
+						ServiceAccountName: serviceAccount.Name,
+						PriorityClassName:  priorityClassName,
+						SecurityContext: &corev1.PodSecurityContext{
+							SeccompProfile: &corev1.SeccompProfile{
+								Type: corev1.SeccompProfileTypeRuntimeDefault,
+							},
+						},
+						Containers: []corev1.Container{
+							{
+								Name:            "victoria-operator",
+								Image:           image,
+								ImagePullPolicy: corev1.PullIfNotPresent,
+								Args: []string{
+									"--leader-elect",
+									"--health-probe-bind-address=:8081",
+									"--metrics-bind-address=:8080",
+									"--controller.disableReconcileFor=VLAgent,VLCluster,VLogs,VMAgent,VMAlert,VMAlertmanager,VMAlertmanagerConfig,VMAnomaly,VMAuth,VMCluster,VMNodeScrape,VMPodScrape,VMProbe,VMRule,VMScrapeConfig,VMServiceScrape,VMSingle,VMStaticScrape,VMUser",
+								},
+								Env: []corev1.EnvVar{
+									{
+										Name:  "WATCH_NAMESPACE",
+										Value: "",
+									},
+								},
+								Resources: corev1.ResourceRequirements{
+									Requests: map[corev1.ResourceName]resource.Quantity{
+										corev1.ResourceCPU:    resource.MustParse("80m"),
+										corev1.ResourceMemory: resource.MustParse("120Mi"),
+									},
+									Limits: map[corev1.ResourceName]resource.Quantity{
+										corev1.ResourceCPU:    resource.MustParse("120m"),
+										corev1.ResourceMemory: resource.MustParse("520Mi"),
+									},
+								},
+								LivenessProbe: &corev1.Probe{
+									ProbeHandler: corev1.ProbeHandler{
+										HTTPGet: &corev1.HTTPGetAction{
+											Path: "/health",
+											Port: intstr.FromInt32(8081),
+										},
+									},
+									InitialDelaySeconds: 15,
+									PeriodSeconds:       20,
+								},
+								ReadinessProbe: &corev1.Probe{
+									ProbeHandler: corev1.ProbeHandler{
+										HTTPGet: &corev1.HTTPGetAction{
+											Path: "/ready",
+											Port: intstr.FromInt32(8081),
+										},
+									},
+									InitialDelaySeconds: 5,
+									PeriodSeconds:       10,
+								},
+								SecurityContext: &corev1.SecurityContext{
+									AllowPrivilegeEscalation: ptr.To(false),
+									Capabilities:             &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
 	})
 
 	JustBeforeEach(func() {
@@ -94,9 +190,6 @@ var _ = Describe("VictoriaOperator", func() {
 	Describe("#Deploy", func() {
 		Context("resources generation", func() {
 			BeforeEach(func() {
-				// test with typical values
-				values = Values{}
-
 				Expect(fakeClient.Get(ctx, client.ObjectKeyFromObject(managedResource), managedResource)).To(BeNotFoundError())
 				Expect(fakeClient.Get(ctx, client.ObjectKeyFromObject(managedResourceSecret), managedResourceSecret)).To(BeNotFoundError())
 
@@ -144,6 +237,7 @@ var _ = Describe("VictoriaOperator", func() {
 			It("should successfully deploy all resources", func() {
 				Expect(managedResource).To(consistOf(
 					serviceAccount,
+					deployment,
 				))
 			})
 		})
