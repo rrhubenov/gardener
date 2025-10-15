@@ -13,6 +13,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -54,9 +55,11 @@ var _ = Describe("VictoriaOperator", func() {
 		managedResource       *resourcesv1alpha1.ManagedResource
 		managedResourceSecret *corev1.Secret
 
-		serviceAccount *corev1.ServiceAccount
-		deployment     *appsv1.Deployment
-		vpa            *vpaautoscalingv1.VerticalPodAutoscaler
+		serviceAccount     *corev1.ServiceAccount
+		deployment         *appsv1.Deployment
+		vpa                *vpaautoscalingv1.VerticalPodAutoscaler
+		clusterRole        *rbacv1.ClusterRole
+		clusterRoleBinding *rbacv1.ClusterRoleBinding
 	)
 
 	BeforeEach(func() {
@@ -212,6 +215,137 @@ var _ = Describe("VictoriaOperator", func() {
 				},
 			},
 		}
+
+		clusterRole = &rbacv1.ClusterRole{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   "victoria-operator",
+				Labels: map[string]string{"app": "victoria-operator"},
+			},
+			Rules: []rbacv1.PolicyRule{
+				{
+					NonResourceURLs: []string{"/metrics", "/metrics/resources", "/metrics/slis"},
+					Verbs:           []string{"get", "watch", "list"},
+				},
+				{
+					APIGroups: []string{""},
+					Resources: []string{
+						"configmaps", "configmaps/finalizers", "endpoints", "events",
+						"persistentvolumeclaims", "persistentvolumeclaims/finalizers",
+						"pods/eviction", "secrets", "secrets/finalizers", "services",
+						"services/finalizers", "serviceaccounts", "serviceaccounts/finalizers",
+					},
+					Verbs: []string{"*"},
+				},
+				{
+					APIGroups: []string{""},
+					Resources: []string{
+						"configmaps/status", "pods", "nodes", "nodes/proxy",
+						"nodes/metrics", "namespaces",
+					},
+					Verbs: []string{"get", "list", "watch"},
+				},
+				{
+					APIGroups: []string{"apps"},
+					Resources: []string{
+						"deployments", "deployments/finalizers", "statefulsets",
+						"statefulsets/finalizers", "daemonsets", "daemonsets/finalizers",
+						"replicasets", "statefulsets/status",
+					},
+					Verbs: []string{"*"},
+				},
+				{
+					APIGroups: []string{"monitoring.coreos.com"},
+					Resources: []string{"*"},
+					Verbs:     []string{"*"},
+				},
+				{
+					APIGroups: []string{"rbac.authorization.k8s.io"},
+					Resources: []string{
+						"clusterrolebindings", "clusterrolebindings/finalizers",
+						"clusterroles", "clusterroles/finalizers", "roles", "rolebindings",
+					},
+					Verbs: []string{"*"},
+				},
+				{
+					APIGroups: []string{"storage.k8s.io"},
+					Resources: []string{"storageclasses"},
+					Verbs:     []string{"list", "get", "watch"},
+				},
+				{
+					APIGroups: []string{"policy"},
+					Resources: []string{"poddisruptionbudgets", "poddisruptionbudgets/finalizers"},
+					Verbs:     []string{"*"},
+				},
+				{
+					APIGroups: []string{"route.openshift.io", "image.openshift.io"},
+					Resources: []string{"routers/metrics", "registry/metrics"},
+					Verbs:     []string{"get"},
+				},
+				{
+					APIGroups: []string{"autoscaling"},
+					Resources: []string{"horizontalpodautoscalers"},
+					Verbs:     []string{"*"},
+				},
+				{
+					APIGroups: []string{"networking.k8s.io"},
+					Resources: []string{"ingresses", "ingresses/finalizers"},
+					Verbs:     []string{"*"},
+				},
+				{
+					APIGroups: []string{"apiextensions.k8s.io"},
+					Resources: []string{"customresourcedefinitions"},
+					Verbs:     []string{"get", "list"},
+				},
+				{
+					APIGroups: []string{"discovery.k8s.io"},
+					Resources: []string{"endpointslices"},
+					Verbs:     []string{"list", "watch", "get"},
+				},
+				{
+					APIGroups: []string{"operator.victoriametrics.com"},
+					Resources: []string{
+						"vlagents", "vlagents/finalizers", "vlagents/status",
+						"vlogs", "vlogs/finalizers", "vlogs/status",
+						"vlsingles", "vlsingles/finalizers", "vlsingles/status",
+						"vlclusters", "vlclusters/finalizers", "vlclusters/status",
+						"vmagents", "vmagents/finalizers", "vmagents/status",
+						"vmalertmanagerconfigs", "vmalertmanagerconfigs/finalizers", "vmalertmanagerconfigs/status",
+						"vmalertmanagers", "vmalertmanagers/finalizers", "vmalertmanagers/status",
+						"vmalerts", "vmalerts/finalizers", "vmalerts/status",
+						"vmauths", "vmauths/finalizers", "vmauths/status",
+						"vmclusters", "vmclusters/finalizers", "vmclusters/status",
+						"vmnodescrapes", "vmnodescrapes/finalizers", "vmnodescrapes/status",
+						"vmpodscrapes", "vmpodscrapes/finalizers", "vmpodscrapes/status",
+						"vmprobes", "vmprobes/finalizers", "vmprobes/status",
+						"vmrules", "vmrules/finalizers", "vmrules/status",
+						"vmscrapeconfigs", "vmscrapeconfigs/finalizers", "vmscrapeconfigs/status",
+						"vmservicescrapes", "vmservicescrapes/finalizers", "vmservicescrapes/status",
+						"vmsingles", "vmsingles/finalizers", "vmsingles/status",
+						"vmstaticscrapes", "vmstaticscrapes/finalizers", "vmstaticscrapes/status",
+						"vmusers", "vmusers/finalizers", "vmusers/status",
+						"vmanomalies", "vmanomalies/finalizers", "vmanomalies/status",
+					},
+					Verbs: []string{"*"},
+				},
+			},
+		}
+
+		clusterRoleBinding = &rbacv1.ClusterRoleBinding{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   "victoria-operator",
+				Labels: map[string]string{"app": "victoria-operator"},
+			},
+			RoleRef: rbacv1.RoleRef{
+				APIGroup: "rbac.authorization.k8s.io",
+				Kind:     "ClusterRole",
+				Name:     "victoria-operator",
+			},
+			Subjects: []rbacv1.Subject{{
+				Kind:      "ServiceAccount",
+				Name:      "victoria-operator",
+				Namespace: namespace,
+			}},
+		}
 	})
 
 	JustBeforeEach(func() {
@@ -270,6 +404,8 @@ var _ = Describe("VictoriaOperator", func() {
 					serviceAccount,
 					deployment,
 					vpa,
+					clusterRole,
+					clusterRoleBinding,
 				))
 			})
 		})
