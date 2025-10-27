@@ -68,6 +68,12 @@ get_group_package () {
   "perses.dev_v1alpha1")
     echo "github.com/perses/perses-operator/api/v1alpha1"
     ;;
+  "operator.victoriametrics.com_v1")
+    echo "github.com/VictoriaMetrics/operator/api/operator/v1"
+    ;;
+  "operator.victoriametrics.com_v1beta1")
+    echo "github.com/VictoriaMetrics/operator/api/operator/v1beta1"
+    ;;
   "autoscaling.k8s.io")
     echo "k8s.io/autoscaler/vertical-pod-autoscaler/pkg/apis/autoscaling.k8s.io/v1"
     ;;
@@ -106,6 +112,8 @@ generate_all_groups () {
   generate_group machine.sapcloud.io
   generate_group dashboard.gardener.cloud
   generate_group opentelemetry.io
+  generate_group operator.victoriametrics.com_v1
+  generate_group operator.victoriametrics.com_v1beta1
 }
 
 generate_group () {
