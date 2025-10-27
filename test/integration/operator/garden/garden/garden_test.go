@@ -487,6 +487,11 @@ spec:
 			"perses.perses.dev",
 			"persesdashboards.perses.dev",
 			"persesdatasources.perses.dev",
+			// victoria-operator
+			"vlagents.operator.victoriametrics.com",
+			"vlclusters.operator.victoriametrics.com",
+			"vlogs.operator.victoriametrics.com",
+			"vlsingles.operator.victoriametrics.com",
 		}
 
 		By("Verify that the custom resource definitions have been created")
@@ -578,6 +583,7 @@ spec:
 			"prometheus-operator",
 			"alertmanager-garden",
 			"perses-operator",
+			"victoria-operator",
 		))
 
 		By("Verify that the virtual garden control plane components have been deployed")
