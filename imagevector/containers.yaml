@@ -191,6 +191,10 @@ images:
     sourceRepository: github.com/gardener/opentelemetry-collector
     repository: europe-docker.pkg.dev/gardener-project/releases/gardener/observability/opentelemetry-collector
     tag: "v0.0.1"
+  - name: victoria-logs
+    sourceRepository: github.com/VictoriaMetrics/VictoriaLogs
+    repository: docker.io/victoriametrics/victoria-logs
+    tag: "v1.37.2"
   # Monitoring
   - name: prometheus-operator
     sourceRepository: github.com/prometheus-operator/prometheus-operator
