@@ -105,6 +105,8 @@ const (
 	ContainerImageNameNodeProblemDetector = "node-problem-detector"
 	// ContainerImageNameOpentelemetryCollector is a constant for an image in the image vector with name 'opentelemetry-collector'.
 	ContainerImageNameOpentelemetryCollector = "opentelemetry-collector"
+	// ContainerImageNameOpentelemetryCollector is a constant for an image in the image vector with name 'opentelemetry-collector'.
+	ContainerImageNameVictoriaLogs = "victoria-logs"
 	// ContainerImageNameOpentelemetryOperator is a constant for an image in the image vector with name 'opentelemetry-operator'.
 	ContainerImageNameOpentelemetryOperator = "opentelemetry-operator"
 	// ContainerImageNamePauseContainer is a constant for an image in the image vector with name 'pause-container'.
