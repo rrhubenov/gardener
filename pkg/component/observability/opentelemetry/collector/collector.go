@@ -400,6 +400,9 @@ func (o *otelCollector) openTelemetryCollector(namespace, lokiEndpoint, genericT
 						"loki": map[string]any{
 							"endpoint": lokiEndpoint,
 						},
+						"otlphttp/victorialogs": map[string]any{
+							"logs_endpoint": "http://vlsingle-example:9428/insert/opentelemetry/v1/logs",
+						},
 					},
 				},
 				Service: otelv1beta1.Service{
@@ -430,6 +433,7 @@ func (o *otelCollector) openTelemetryCollector(namespace, lokiEndpoint, genericT
 						"logs/vali": {
 							Exporters: []string{
 								"loki",
+								"otlphttp/victorialogs",
 							},
 							Receivers: []string{
 								"otlp",

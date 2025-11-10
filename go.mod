@@ -1,6 +1,6 @@
 module github.com/gardener/gardener
 
-go 1.24.5
+go 1.25.3
 
 require (
 	github.com/Masterminds/semver/v3 v3.4.0
@@ -20,7 +20,7 @@ require (
 	github.com/gardener/terminal-controller-manager v0.34.0
 	github.com/go-jose/go-jose/v4 v4.1.1
 	github.com/go-logr/logr v1.4.3
-	github.com/go-test/deep v1.1.0
+	github.com/go-test/deep v1.1.1
 	github.com/gogo/protobuf v1.3.2
 	github.com/google/gnostic-models v0.7.0
 	github.com/google/go-cmp v0.7.0

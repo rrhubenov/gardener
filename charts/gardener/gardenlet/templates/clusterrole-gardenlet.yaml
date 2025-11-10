@@ -193,6 +193,10 @@ rules:
   - perses.perses.dev
   - persesdashboards.perses.dev
   - persesdatasources.perses.dev
+  - vlagents.operator.victoriametrics.com
+  - vlclusters.operator.victoriametrics.com
+  - vlogs.operator.victoriametrics.com
+  - vlsingles.operator.victoriametrics.com
   - opentelemetrycollectors.opentelemetry.io
   - targetallocators.opentelemetry.io
   - opampbridges.opentelemetry.io

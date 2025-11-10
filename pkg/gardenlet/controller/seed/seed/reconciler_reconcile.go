@@ -240,6 +240,11 @@ func (r *Reconciler) runReconcileSeedFlow(
 			Fn:     component.OpWait(c.persesCRD).Deploy,
 			SkipIf: seedIsGarden,
 		})
+		deployVictoriaCRDs = g.Add(flow.Task{
+			Name:   "Deploying Victoria-related custom resource definitions",
+			Fn:     component.OpWait(c.victoriaCRD).Deploy,
+			SkipIf: seedIsGarden,
+		})
 		deployOpenTelemetryCRDs = g.Add(flow.Task{
 			Name:   "Deploy OpenTelemetry-related custom resource definitions",
 			Fn:     component.OpWait(c.openTelemetryCRD).Deploy,
@@ -254,6 +259,7 @@ func (r *Reconciler) runReconcileSeedFlow(
 			deployFluentCRDs,
 			deployPrometheusCRDs,
 			deployPersesCRDs,
+			deployVictoriaCRDs,
 			deployOpenTelemetryCRDs,
 		)
 		_ = g.Add(flow.Task{
@@ -494,6 +500,12 @@ func (r *Reconciler) runReconcileSeedFlow(
 		_ = g.Add(flow.Task{
 			Name:         "Deploying Perses Operator",
 			Fn:           c.persesOperator.Deploy,
+			Dependencies: flow.NewTaskIDs(syncPointReadyForSystemComponents),
+			SkipIf:       seedIsGarden,
+		})
+		_ = g.Add(flow.Task{
+			Name:         "Deploying Victoria Operator",
+			Fn:           c.victoriaOperator.Deploy,
 			Dependencies: flow.NewTaskIDs(syncPointReadyForSystemComponents),
 			SkipIf:       seedIsGarden,
 		})

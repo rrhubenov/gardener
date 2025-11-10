@@ -342,6 +342,11 @@ func (v *victoriaOperator) clusterRole() *rbacv1.ClusterRole {
 				},
 				Verbs: []string{"*"},
 			},
+			{
+				APIGroups: []string{"coordination.k8s.io"},
+				Resources: []string{"leases"},
+				Verbs:     []string{"*"},
+			},
 		},
 	}
 }
