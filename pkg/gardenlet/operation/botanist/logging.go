@@ -15,6 +15,7 @@ import (
 	"github.com/gardener/gardener/pkg/component/observability/logging/eventlogger"
 	"github.com/gardener/gardener/pkg/component/observability/logging/vali"
 	valiconstants "github.com/gardener/gardener/pkg/component/observability/logging/vali/constants"
+	"github.com/gardener/gardener/pkg/component/observability/logging/victorialogs"
 	"github.com/gardener/gardener/pkg/component/observability/opentelemetry/collector"
 	"github.com/gardener/gardener/pkg/component/shared"
 	"github.com/gardener/gardener/pkg/features"
@@ -55,6 +56,16 @@ func (b *Botanist) DeployLogging(ctx context.Context) error {
 		}
 	}
 
+	if features.DefaultFeatureGate.Enabled(features.DeployVictoriaLogs) {
+		if err := b.Shoot.Components.ControlPlane.VictoriaLogs.Deploy(ctx); err != nil {
+			return fmt.Errorf("deploying VictoriaLogs failed: %w", err)
+		}
+	} else {
+		if err := b.Shoot.Components.ControlPlane.VictoriaLogs.Destroy(ctx); err != nil {
+			return fmt.Errorf("destroying VictoriaLogs failed: %w", err)
+		}
+	}
+
 	// check if vali is enabled in gardenlet config, default is true
 	if !gardenlethelper.IsValiEnabled(b.Config) {
 		if err = b.Shoot.Components.ControlPlane.Vali.Destroy(ctx); err != nil {
@@ -73,6 +84,9 @@ func (b *Botanist) DestroySeedLogging(ctx context.Context) error {
 		return err
 	}
 	if err := b.Shoot.Components.ControlPlane.OtelCollector.Destroy(ctx); err != nil {
+		return err
+	}
+	if err := b.Shoot.Components.ControlPlane.VictoriaLogs.Destroy(ctx); err != nil {
 		return err
 	}
 
@@ -155,5 +169,22 @@ func (b *Botanist) DefaultOtelCollector() (collector.Interface, error) {
 			ValiHost:                b.ComputeValiHost(),
 		},
 		b.SecretsManager,
+	), nil
+}
+
+// DefaultVictoriaLogs returns a deployer for the VictoriaLogs.
+func (b *Botanist) DefaultVictoriaLogs() (component.DeployWaiter, error) {
+	image, err := imagevector.Containers().FindImage(imagevector.ContainerImageNameVictoriaLogs)
+	if err != nil {
+		return nil, err
+	}
+
+	return victorialogs.New(
+		b.SeedClientSet.Client(),
+		b.Shoot.ControlPlaneNamespace,
+		victorialogs.Values{
+			Image:   image.String(),
+			Storage: nil,
+		},
 	), nil
 }

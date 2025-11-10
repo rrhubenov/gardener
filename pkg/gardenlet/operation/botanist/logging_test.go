@@ -49,6 +49,7 @@ var _ = Describe("Logging", func() {
 		eventLoggerDeployer   *mockcomponent.MockDeployer
 		otelCollectorDeployer *mockcollector.MockInterface
 		valiDeployer          *mockvali.MockInterface
+		victoriaLogsDeployer  *mockcomponent.MockDeployWaiter
 		fakeSecretManager     secretsmanager.Interface
 		chartApplier          *mock.MockChartApplier
 		ctx                   = context.TODO()
@@ -75,6 +76,7 @@ var _ = Describe("Logging", func() {
 		eventLoggerDeployer = mockcomponent.NewMockDeployer(ctrl)
 		otelCollectorDeployer = mockcollector.NewMockInterface(ctrl)
 		valiDeployer = mockvali.NewMockInterface(ctrl)
+		victoriaLogsDeployer = mockcomponent.NewMockDeployWaiter(ctrl)
 		fakeSecretManager = fakesecretsmanager.New(c, controlPlaneNamespace)
 
 		botanist = &Botanist{
@@ -107,6 +109,7 @@ var _ = Describe("Logging", func() {
 							EventLogger:   eventLoggerDeployer,
 							Vali:          valiDeployer,
 							OtelCollector: otelCollectorDeployer,
+							VictoriaLogs:  victoriaLogsDeployer,
 						},
 					},
 					IsWorkerless: false,
@@ -144,6 +147,7 @@ var _ = Describe("Logging", func() {
 			gomock.InOrder(
 				eventLoggerDeployer.EXPECT().Destroy(ctx),
 				otelCollectorDeployer.EXPECT().Destroy(ctx),
+				victoriaLogsDeployer.EXPECT().Destroy(ctx),
 				valiDeployer.EXPECT().Destroy(ctx),
 			)
 
@@ -155,6 +159,7 @@ var _ = Describe("Logging", func() {
 			gomock.InOrder(
 				eventLoggerDeployer.EXPECT().Destroy(ctx),
 				otelCollectorDeployer.EXPECT().Destroy(ctx),
+				victoriaLogsDeployer.EXPECT().Destroy(ctx),
 				valiDeployer.EXPECT().Destroy(ctx),
 			)
 
@@ -172,6 +177,7 @@ var _ = Describe("Logging", func() {
 					}),
 					valiDeployer.EXPECT().WithAuthenticationProxy(false),
 					otelCollectorDeployer.EXPECT().Destroy(ctx),
+					victoriaLogsDeployer.EXPECT().Destroy(ctx),
 					valiDeployer.EXPECT().Deploy(ctx),
 				)
 
@@ -210,6 +216,7 @@ var _ = Describe("Logging", func() {
 
 					eventLoggerDeployer.EXPECT().Deploy(ctx),
 					otelCollectorDeployer.EXPECT().Destroy(ctx),
+					victoriaLogsDeployer.EXPECT().Destroy(ctx),
 					valiDeployer.EXPECT().Deploy(ctx),
 				)
 
@@ -243,6 +250,41 @@ var _ = Describe("Logging", func() {
 						eventLoggerDeployer.EXPECT().Deploy(ctx),
 						otelCollectorDeployer.EXPECT().WithAuthenticationProxy(true),
 						otelCollectorDeployer.EXPECT().Deploy(ctx),
+						valiDeployer.EXPECT().Deploy(ctx),
+						victoriaLogsDeployer.EXPECT().Destroy(ctx),
+					)
+
+					Expect(botanist.DeployLogging(ctx)).To(Succeed())
+				})
+			})
+
+			Context("VictoriaLogs feature gate", func() {
+				BeforeEach(func() {
+					DeferCleanup(test.WithFeatureGate(features.DefaultFeatureGate, features.DeployVictoriaLogs, true))
+				})
+
+				It("should successfully deploy all of the components including VictoriaLogs when it is enabled", func() {
+					gardenletfeatures.RegisterFeatureGates()
+					gomock.InOrder(
+						c.EXPECT().Get(ctx, gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context,
+							_ runtimeclient.ObjectKey, obj runtimeclient.Object, _ ...runtimeclient.GetOption) error {
+							deployment := &appsv1.Deployment{
+								ObjectMeta: metav1.ObjectMeta{
+									Name:      v1beta1constants.DeploymentNameGardenerResourceManager,
+									Namespace: controlPlaneNamespace,
+								},
+								Status: appsv1.DeploymentStatus{
+									ReadyReplicas: 1,
+								},
+							}
+							*obj.(*appsv1.Deployment) = *deployment
+							return nil
+						}),
+						valiDeployer.EXPECT().WithAuthenticationProxy(true),
+
+						eventLoggerDeployer.EXPECT().Deploy(ctx),
+						otelCollectorDeployer.EXPECT().Destroy(ctx),
+						victoriaLogsDeployer.EXPECT().Deploy(ctx),
 						valiDeployer.EXPECT().Deploy(ctx),
 					)
 
