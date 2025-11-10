@@ -49,6 +49,7 @@ var _ = Describe("Logging", func() {
 		eventLoggerDeployer   *mockcomponent.MockDeployer
 		otelCollectorDeployer *mockcollector.MockInterface
 		valiDeployer          *mockvali.MockInterface
+		victoriaLogsDeployer  *mockcomponent.MockDeployWaiter
 		fakeSecretManager     secretsmanager.Interface
 		chartApplier          *mock.MockChartApplier
 		ctx                   = context.TODO()
@@ -75,6 +76,7 @@ var _ = Describe("Logging", func() {
 		eventLoggerDeployer = mockcomponent.NewMockDeployer(ctrl)
 		otelCollectorDeployer = mockcollector.NewMockInterface(ctrl)
 		valiDeployer = mockvali.NewMockInterface(ctrl)
+		victoriaLogsDeployer = mockcomponent.NewMockDeployWaiter(ctrl)
 		fakeSecretManager = fakesecretsmanager.New(c, controlPlaneNamespace)
 
 		botanist = &Botanist{
@@ -107,6 +109,7 @@ var _ = Describe("Logging", func() {
 							EventLogger:   eventLoggerDeployer,
 							Vali:          valiDeployer,
 							OtelCollector: otelCollectorDeployer,
+							VictoriaLogs:  victoriaLogsDeployer,
 						},
 					},
 					IsWorkerless: false,
