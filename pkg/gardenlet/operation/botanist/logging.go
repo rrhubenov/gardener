@@ -167,6 +167,7 @@ func (b *Botanist) DefaultOtelCollector() (collector.Interface, error) {
 			ShootNodeLoggingEnabled: b.isShootNodeLoggingEnabled(),
 			IngressHost:             b.ComputeOpenTelemetryCollectorHost(),
 			ValiHost:                b.ComputeValiHost(),
+			DeployVictoriaLogs:      features.DefaultFeatureGate.Enabled(features.DeployVictoriaLogs),
 		},
 		b.SecretsManager,
 	), nil

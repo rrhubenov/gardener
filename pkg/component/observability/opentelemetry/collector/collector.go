@@ -64,6 +64,8 @@ type Values struct {
 	IngressHost string
 	// ValiHost is the name for the ingress to access the Vali instance.
 	ValiHost string
+	// DeployVictoriaLogs indicates whether VictoriaLogs should be deployed and used in the pipeline.
+	DeployVictoriaLogs bool
 }
 
 type otelCollector struct {
@@ -392,6 +394,9 @@ func (o *otelCollector) openTelemetryCollector(namespace, lokiEndpoint, genericT
 						"loki": map[string]any{
 							"endpoint": lokiEndpoint,
 						},
+						"otlphttp/victorialogs": map[string]any{
+							"logs_endpoint": "http://logging-vl:9428/insert/opentelemetry/v1/logs",
+						},
 					},
 				},
 				Service: otelv1beta1.Service{
@@ -435,6 +440,20 @@ func (o *otelCollector) openTelemetryCollector(namespace, lokiEndpoint, genericT
 				},
 			},
 		},
+	}
+
+	if o.values.DeployVictoriaLogs {
+		obj.Spec.Config.Service.Pipelines["logs/victorialogs"] = &otelv1beta1.Pipeline{
+			Exporters: []string{
+				"otlphttp/victorialogs",
+			},
+			Receivers: []string{
+				"otlp",
+			},
+			Processors: []string{
+				"batch",
+			},
+		}
 	}
 
 	if o.values.WithRBACProxy {
@@ -633,6 +652,7 @@ func getLabels() map[string]string {
 		v1beta1constants.LabelRole:  v1beta1constants.LabelObservability,
 		v1beta1constants.GardenRole: v1beta1constants.GardenRoleObservability,
 		gardenerutils.NetworkPolicyLabel(valiconstants.ServiceName, valiconstants.ValiPort): v1beta1constants.LabelNetworkPolicyAllowed,
+		gardenerutils.NetworkPolicyLabel("logging-vl", 9428):                                v1beta1constants.LabelNetworkPolicyAllowed,
 		v1beta1constants.LabelNetworkPolicyToDNS:                                            v1beta1constants.LabelNetworkPolicyAllowed,
 		v1beta1constants.LabelNetworkPolicyToRuntimeAPIServer:                               v1beta1constants.LabelNetworkPolicyAllowed,
 		v1beta1constants.LabelObservabilityApplication:                                      "opentelemetry-collector",
