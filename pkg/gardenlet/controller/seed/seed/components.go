@@ -125,6 +125,7 @@ type components struct {
 	persesOperator                component.DeployWaiter
 	victoriaOperator              component.DeployWaiter
 	openTelemetryOperator         component.DeployWaiter
+	victoriaLogs                  component.DeployWaiter
 }
 
 func (r *Reconciler) instantiateComponents(
@@ -282,6 +283,10 @@ func (r *Reconciler) instantiateComponents(
 		return
 	}
 	c.victoriaOperator, err = r.newVictoriaOperator()
+	if err != nil {
+		return
+	}
+	c.victoriaLogs, err = r.newVictoriaLogs()
 	if err != nil {
 		return
 	}
@@ -562,6 +567,32 @@ func (r *Reconciler) newVali() (component.Deployer, error) {
 
 	if !gardenlethelper.IsLoggingEnabled(&r.Config) {
 		return component.OpDestroy(deployer), err
+	}
+
+	return deployer, err
+}
+
+func (r *Reconciler) newVictoriaLogs() (component.DeployWaiter, error) {
+	var storage *resource.Quantity
+	if r.Config.Logging != nil && r.Config.Logging.VictoriaLogs != nil && r.Config.Logging.VictoriaLogs.Garden != nil {
+		storage = r.Config.Logging.VictoriaLogs.Garden.Storage
+	}
+
+	deployer, err := sharedcomponent.NewVictoriaLogs(
+		r.SeedClientSet.Client(),
+		r.GardenNamespace,
+		component.ClusterTypeSeed,
+		1,
+		v1beta1constants.PriorityClassNameSeedSystem600,
+		storage,
+		false,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	if !gardenlethelper.IsLoggingEnabled(&r.Config) {
+		return component.OpDestroyAndWait(deployer), err
 	}
 
 	return deployer, err
