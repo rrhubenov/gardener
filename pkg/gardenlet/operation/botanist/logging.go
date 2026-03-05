@@ -33,7 +33,6 @@ func (b *Botanist) DeployLogging(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("checking if Gardener Resource Manager is ready failed: %w", err)
 	}
-	b.Shoot.Components.ControlPlane.Vali.WithAuthenticationProxy(grmIsPresent && !features.DefaultFeatureGate.Enabled(features.OpenTelemetryCollector))
 
 	if b.isShootEventLoggerEnabled() && grmIsPresent {
 		if err := b.Shoot.Components.ControlPlane.EventLogger.Deploy(ctx); err != nil {
@@ -56,23 +55,24 @@ func (b *Botanist) DeployLogging(ctx context.Context) error {
 		}
 	}
 
-	if features.DefaultFeatureGate.Enabled(features.VictoriaLogsBackend) && gardenlethelper.IsVictoriaLogsEnabled(b.Config) {
-		if err := b.Shoot.Components.ControlPlane.VictoriaLogs.Deploy(ctx); err != nil {
-			return fmt.Errorf("deploying VictoriaLogs failed: %w", err)
-		}
-	} else {
-		if err := b.Shoot.Components.ControlPlane.VictoriaLogs.Destroy(ctx); err != nil {
-			return fmt.Errorf("destroying VictoriaLogs failed: %w", err)
-		}
+	if err := b.Shoot.Components.ControlPlane.VictoriaLogs.Deploy(ctx); err != nil {
+		return fmt.Errorf("failed to reconcile VictoriaLogs: %w", err)
 	}
 
-	// check if vali is enabled in gardenlet config, default is true
-	if !gardenlethelper.IsValiEnabled(b.Config) {
-		if err = b.Shoot.Components.ControlPlane.Vali.Destroy(ctx); err != nil {
-			return fmt.Errorf("destroying Vali failed: %w", err)
+	b.Shoot.Components.ControlPlane.Vali.WithAuthenticationProxy(grmIsPresent && !features.DefaultFeatureGate.Enabled(features.OpenTelemetryCollector))
+
+	// Deploy or destroy Vali based on feature gates and config
+	shouldDestroyVali := features.DefaultFeatureGate.Enabled(features.VictoriaLogsBackend) && features.DefaultFeatureGate.Enabled(features.RemoveVali) ||
+		!gardenlethelper.IsValiEnabled(b.Config)
+
+	if shouldDestroyVali {
+		if err := b.Shoot.Components.ControlPlane.Vali.Destroy(ctx); err != nil {
+			return fmt.Errorf("failed to destroy Vali: %w", err)
 		}
-	} else if err = b.Shoot.Components.ControlPlane.Vali.Deploy(ctx); err != nil {
-		return fmt.Errorf("deploying Vali failed: %w", err)
+	} else {
+		if err := b.Shoot.Components.ControlPlane.Vali.Deploy(ctx); err != nil {
+			return fmt.Errorf("failed to deploy Vali: %w", err)
+		}
 	}
 
 	return nil
@@ -176,7 +176,7 @@ func (b *Botanist) DefaultOtelCollector() (collector.Interface, error) {
 
 // DefaultVictoriaLogs returns a deployer for VictoriaLogs.
 func (b *Botanist) DefaultVictoriaLogs() (component.DeployWaiter, error) {
-	return shared.NewVictoriaLogs(
+	deployer, err := shared.NewVictoriaLogs(
 		b.SeedClientSet.Client(),
 		b.Shoot.ControlPlaneNamespace,
 		component.ClusterTypeShoot,
@@ -185,4 +185,19 @@ func (b *Botanist) DefaultVictoriaLogs() (component.DeployWaiter, error) {
 		nil,
 		false,
 	)
+	if err != nil {
+		return nil, err
+	}
+
+	// Destroy VictoriaLogs if:
+	// 1. VictoriaLogsBackend feature gate is disabled, OR
+	// 2. VictoriaLogs is disabled in gardenlet config, OR
+	// 3. Shoot control plane logging is disabled
+	if !features.DefaultFeatureGate.Enabled(features.VictoriaLogsBackend) ||
+		!gardenlethelper.IsVictoriaLogsEnabled(b.Config) ||
+		!b.Shoot.IsShootControlPlaneLoggingEnabled(b.Config) {
+		return component.OpDestroyAndWait(deployer), nil
+	}
+
+	return deployer, nil
 }

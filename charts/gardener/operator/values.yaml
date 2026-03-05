@@ -56,6 +56,8 @@ config:
     enableContentionProfiling: false
   featureGates:
     DefaultSeccompProfile: true
+    VictoriaLogsBackend: true
+    RemoveVali: false
   controllers:
     garden:
       concurrentSyncs: 1

@@ -17,6 +17,7 @@ spec:
       VPNBondingModeRoundRobin: true
       PrometheusHealthChecks: true
       VictoriaLogsBackend: true
+      RemoveVali: false
     controllers:
       shoot:
         reconcileInMaintenanceOnly: true

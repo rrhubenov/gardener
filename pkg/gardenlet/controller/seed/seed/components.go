@@ -570,7 +570,8 @@ func (r *Reconciler) newVali() (component.Deployer, error) {
 		return nil, err
 	}
 
-	if !gardenlethelper.IsLoggingEnabled(&r.Config) {
+	if !gardenlethelper.IsLoggingEnabled(&r.Config) ||
+		(features.DefaultFeatureGate.Enabled(features.VictoriaLogsBackend) && features.DefaultFeatureGate.Enabled(features.RemoveVali)) {
 		return component.OpDestroy(deployer), err
 	}
 
@@ -596,7 +597,7 @@ func (r *Reconciler) newVictoriaLogs() (component.DeployWaiter, error) {
 		return nil, err
 	}
 
-	if !gardenlethelper.IsLoggingEnabled(&r.Config) {
+	if !gardenlethelper.IsLoggingEnabled(&r.Config) || !features.DefaultFeatureGate.Enabled(features.VictoriaLogsBackend) {
 		return component.OpDestroyAndWait(deployer), err
 	}
 
