@@ -17,7 +17,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/serializer/json"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	webhookadmissionv1 "k8s.io/apiserver/pkg/admission/plugin/webhook/config/apis/webhookadmission/v1"
-	webhookadmissionv1alpha1 "k8s.io/apiserver/pkg/admission/plugin/webhook/config/apis/webhookadmission/v1alpha1"
 	apiserverv1 "k8s.io/apiserver/pkg/apis/apiserver/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
@@ -31,7 +30,6 @@ func init() {
 	admissionScheme := runtime.NewScheme()
 	utilruntime.Must(apiserverv1.AddToScheme(admissionScheme))
 	utilruntime.Must(webhookadmissionv1.AddToScheme(admissionScheme))
-	utilruntime.Must(webhookadmissionv1alpha1.AddToScheme(admissionScheme))
 
 	var (
 		ser = json.NewSerializerWithOptions(json.DefaultMetaFactory, admissionScheme, admissionScheme, json.SerializerOptions{
@@ -41,7 +39,6 @@ func init() {
 		})
 		versions = schema.GroupVersions([]schema.GroupVersion{
 			webhookadmissionv1.SchemeGroupVersion,
-			webhookadmissionv1alpha1.SchemeGroupVersion,
 		})
 	)
 
@@ -132,22 +129,14 @@ func computeRelevantAdmissionPluginRawConfig(plugin AdmissionPluginConfig) ([]by
 kind: WebhookAdmissionConfiguration`, webhookadmissionv1.SchemeGroupVersion.String())
 			}
 		}
-
-		configObj, err := runtime.Decode(admissionCodec, plugin.Config.Raw)
+		config := &webhookadmissionv1.WebhookAdmission{}
+		err := runtime.DecodeInto(admissionCodec, plugin.Config.Raw, config)
 		if err != nil {
 			return nil, fmt.Errorf("cannot decode config for admission plugin %s: %w", plugin.Name, err)
 		}
 
-		switch config := configObj.(type) {
-		case *webhookadmissionv1.WebhookAdmission:
-			config.KubeConfigFile = kubeconfigFilePath
-			return runtime.Encode(admissionCodec, config)
-		case *webhookadmissionv1alpha1.WebhookAdmission:
-			config.KubeConfigFile = kubeconfigFilePath
-			return runtime.Encode(admissionCodec, config)
-		default:
-			return nil, fmt.Errorf("expected apiserver.config.k8s.io/{v1alpha1.WebhookAdmission,v1.WebhookAdmissionConfiguration} in %s plugin configuration but got %T", plugin.Name, config)
-		}
+		config.KubeConfigFile = kubeconfigFilePath
+		return runtime.Encode(admissionCodec, config)
 
 	case "ImagePolicyWebhook":
 		// The configuration for this admission plugin is not backed by the API machinery, hence we have to use
