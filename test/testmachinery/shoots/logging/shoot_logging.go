@@ -9,17 +9,13 @@ import (
 	"time"
 
 	"github.com/onsi/ginkgo/v2"
-	istionetworkingv1beta1 "istio.io/client-go/pkg/apis/networking/v1beta1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/apimachinery/pkg/types"
 	utilrand "k8s.io/apimachinery/pkg/util/rand"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 	"github.com/gardener/gardener/pkg/controllerutils"
 	"github.com/gardener/gardener/pkg/utils"
 	kubernetesutils "github.com/gardener/gardener/pkg/utils/kubernetes"
@@ -52,8 +48,6 @@ var _ = ginkgo.Describe("Seed logging testing", func() {
 	shootFramework := framework.NewShootFramework(nil)
 
 	var (
-		plutonoVirtualService client.Object = &istionetworkingv1beta1.VirtualService{}
-
 		shootNamespace           = &corev1.Namespace{}
 		shootNamespaceLabelKey   = "gardener.cloud/test"
 		shootNamespaceLabelValue = "logging"
@@ -67,15 +61,6 @@ var _ = ginkgo.Describe("Seed logging testing", func() {
 		shootNamespace.Name = shootFramework.ShootSeedNamespace()
 
 		seedClient := shootFramework.SeedClient.Client()
-		// Get the plutono VirtualService
-		framework.ExpectNoError(
-			seedClient.Get(ctx,
-				types.NamespacedName{
-					Namespace: shootFramework.ShootSeedNamespace(),
-					Name:      v1beta1constants.DeploymentNamePlutono},
-				plutonoVirtualService,
-			),
-		)
 		// Set label to the testing namespace
 		_, err := controllerutils.GetAndCreateOrMergePatch(ctx,
 			seedClient, shootNamespace,
