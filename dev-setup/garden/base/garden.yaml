@@ -50,10 +50,12 @@ spec:
         storage:
           capacity: 10Gi
     kubernetes:
-      version: 1.35.4
+      version: 1.36.2
     gardener:
       clusterIdentity: gardener-local
       gardenerAPIServer:
+        admissionPlugins:
+        - name: MutatingAdmissionPolicy
         featureGates:
           InPlaceNodeUpdates: true
           VersionClassificationLifecycle: true
