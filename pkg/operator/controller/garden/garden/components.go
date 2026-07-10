@@ -69,7 +69,9 @@ import (
 	"github.com/gardener/gardener/pkg/component/observability/logging"
 	"github.com/gardener/gardener/pkg/component/observability/logging/fluentcustomresources"
 	"github.com/gardener/gardener/pkg/component/observability/logging/fluentoperator"
+	"github.com/gardener/gardener/pkg/component/observability/logging/vali"
 	victoriaoperator "github.com/gardener/gardener/pkg/component/observability/logging/victoria/operator"
+	"github.com/gardener/gardener/pkg/component/observability/logging/victorialogs"
 	"github.com/gardener/gardener/pkg/component/observability/monitoring/alertmanager"
 	"github.com/gardener/gardener/pkg/component/observability/monitoring/blackboxexporter"
 	gardenblackboxexporter "github.com/gardener/gardener/pkg/component/observability/monitoring/blackboxexporter/garden"
@@ -1445,6 +1447,7 @@ func (r *Reconciler) newVali(ingressGatewayValues []istio.IngressGatewayValues) 
 		true,
 		ingressGatewayValues[0].Labels,
 		ingressGatewayValues[0].Namespace,
+		vali.PVCAutoscalingConfig{},
 	)
 	if err != nil {
 		return nil, err
@@ -1468,6 +1471,7 @@ func (r *Reconciler) newVictoriaLogs() (component.DeployWaiter, error) {
 		v1beta1constants.PriorityClassNameGardenSystem100,
 		nil,
 		true,
+		victorialogs.PVCAutoscalingConfig{},
 	)
 	if err != nil {
 		return nil, err

@@ -12,6 +12,7 @@ import (
 	"text/template"
 
 	"github.com/Masterminds/sprig/v3"
+	pvcautoscalerv1alpha1 "github.com/gardener/pvc-autoscaler/api/autoscaling/v1alpha1"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	istioapiannotation "istio.io/api/annotation"
 	istioapinetworkingv1beta1 "istio.io/api/networking/v1beta1"
@@ -128,6 +129,15 @@ type Values struct {
 	IstioIngressGatewayNamespace string
 	ShootNodeLoggingEnabled      bool
 	Storage                      *resource.Quantity
+	PVCAutoscaling               PVCAutoscalingConfig
+}
+
+// PVCAutoscalingConfig configures whether and up to what capacity the Vali PVC is autoscaled.
+type PVCAutoscalingConfig struct {
+	// Enabled controls whether the component creates a PersistentVolumeClaimAutoscaler resource.
+	Enabled bool
+	// MaxCapacity is the upper bound up to which the PVC may be scaled.
+	MaxCapacity resource.Quantity
 }
 
 // Interface is the interface for the Vali deployer.
@@ -168,7 +178,7 @@ func (v *vali) Deploy(ctx context.Context) error {
 		resources []client.Object
 	)
 
-	if v.values.Storage != nil {
+	if v.values.Storage != nil && !v.values.PVCAutoscaling.Enabled {
 		if err := v.resizeOrDeleteValiDataVolumeIfStorageNotTheSame(ctx); err != nil {
 			return err
 		}
@@ -263,6 +273,10 @@ func (v *vali) Deploy(ctx context.Context) error {
 		v.getPrometheusRule(),
 	)
 
+	if v.values.PVCAutoscaling.Enabled {
+		resources = append(resources, v.getPVCA(v.values.PVCAutoscaling))
+	}
+
 	if err := registry.Add(resources...); err != nil {
 		return err
 	}
@@ -335,6 +349,35 @@ func (v *vali) getVPA() *vpaautoscalingv1.VerticalPodAutoscaler {
 	}
 
 	return vpa
+}
+
+func (v *vali) getPVCA(pvcAutoscaling PVCAutoscalingConfig) *pvcautoscalerv1alpha1.PersistentVolumeClaimAutoscaler {
+	pvca := &pvcautoscalerv1alpha1.PersistentVolumeClaimAutoscaler{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      valiconstants.ManagedResourceNameRuntime,
+			Namespace: v.namespace,
+			Labels:    getLabels(),
+		},
+		Spec: pvcautoscalerv1alpha1.PersistentVolumeClaimAutoscalerSpec{
+			TargetRef: autoscalingv1.CrossVersionObjectReference{
+				APIVersion: appsv1.SchemeGroupVersion.String(),
+				Kind:       "StatefulSet",
+				Name:       valiName,
+			},
+			VolumePolicies: []pvcautoscalerv1alpha1.VolumePolicy{
+				{
+					MaxCapacity: pvcAutoscaling.MaxCapacity,
+					ScaleUp: &pvcautoscalerv1alpha1.ScalingRules{
+						UtilizationThresholdPercent: new(70),
+						StepPercent:                 new(10),
+						MinStepAbsolute:             new(resource.MustParse("1Gi")),
+					},
+				},
+			},
+		},
+	}
+
+	return pvca
 }
 
 func (v *vali) getIstioResources(tlsSecret *corev1.Secret) ([]client.Object, error) {

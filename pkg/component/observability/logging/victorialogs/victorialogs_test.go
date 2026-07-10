@@ -9,6 +9,7 @@ import (
 
 	victoriametricsv1 "github.com/VictoriaMetrics/operator/api/operator/v1"
 	victoriametricsv1beta1 "github.com/VictoriaMetrics/operator/api/operator/v1beta1"
+	pvcautoscalerv1alpha1 "github.com/gardener/pvc-autoscaler/api/autoscaling/v1alpha1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/types"
@@ -257,6 +258,33 @@ var _ = Describe("VictoriaLogs", func() {
 			Expect(customResourcesManagedResourceSecret.Labels["resources.gardener.cloud/garbage-collectable-reference"]).To(Equal("true"))
 		})
 
+		DescribeTable("should successfully deploy all resources including the PersistentVolumeClaimAutoscaler when PVC autoscaler is enabled",
+			func(maxCapacity resource.Quantity) {
+				values = Values{
+					Image: image,
+					PVCAutoscaling: PVCAutoscalingConfig{
+						Enabled:     true,
+						MaxCapacity: maxCapacity,
+					},
+				}
+				component = New(c, namespace, values)
+
+				Expect(component.Deploy(ctx)).To(Succeed())
+
+				Expect(c.Get(ctx, client.ObjectKeyFromObject(customResourcesManagedResource), customResourcesManagedResource)).To(Succeed())
+				customResourcesManagedResourceSecret.Name = customResourcesManagedResource.Spec.SecretRefs[0].Name
+				Expect(customResourcesManagedResource).To(consistOf(
+					vlSingle,
+					vpa,
+					serviceMonitor,
+					prometheusRule,
+					getPVCA(maxCapacity),
+				))
+			},
+			Entry("shoot max capacity", resource.MustParse("40Gi")),
+			Entry("seed max capacity", resource.MustParse("200Gi")),
+		)
+
 		Context("when deployed in seed cluster", func() {
 			BeforeEach(func() {
 				values = Values{
@@ -490,6 +518,33 @@ var _ = Describe("VictoriaLogs", func() {
 		})
 	})
 })
+
+func getPVCA(maxCapacity resource.Quantity) *pvcautoscalerv1alpha1.PersistentVolumeClaimAutoscaler {
+	return &pvcautoscalerv1alpha1.PersistentVolumeClaimAutoscaler{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      victorialogsconstants.VLSingleResourceName,
+			Namespace: namespace,
+			Labels:    getLabels(),
+		},
+		Spec: pvcautoscalerv1alpha1.PersistentVolumeClaimAutoscalerSpec{
+			TargetRef: autoscalingv1.CrossVersionObjectReference{
+				APIVersion: appsv1.SchemeGroupVersion.String(),
+				Kind:       "Deployment",
+				Name:       "vlsingle-" + victorialogsconstants.VLSingleResourceName,
+			},
+			VolumePolicies: []pvcautoscalerv1alpha1.VolumePolicy{
+				{
+					MaxCapacity: maxCapacity,
+					ScaleUp: &pvcautoscalerv1alpha1.ScalingRules{
+						UtilizationThresholdPercent: new(70),
+						StepPercent:                 new(10),
+						MinStepAbsolute:             new(resource.MustParse("1Gi")),
+					},
+				},
+			},
+		},
+	}
+}
 
 func getLabels() map[string]string {
 	return map[string]string{
