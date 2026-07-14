@@ -47,6 +47,7 @@ import (
 	"github.com/gardener/gardener/pkg/features"
 	ctrlinstutils "github.com/gardener/gardener/pkg/gardenlet/controller/controllerinstallation/utils"
 	"github.com/gardener/gardener/pkg/utils"
+	chartutils "github.com/gardener/gardener/pkg/utils/chart"
 	gardenerutils "github.com/gardener/gardener/pkg/utils/gardener"
 	gardenletutils "github.com/gardener/gardener/pkg/utils/gardener/gardenlet"
 	kubernetesutils "github.com/gardener/gardener/pkg/utils/kubernetes"
@@ -196,6 +197,12 @@ func (r *Reconciler) reconcile(
 			conditionValid = v1beta1helper.UpdatedConditionWithClock(r.Clock, conditionValid, gardencorev1beta1.ConditionFalse, "ChartInformationInvalid", fmt.Sprintf("chart values cannot be unmarshalled: %+v", err))
 			return reconcile.Result{}, err
 		}
+	}
+
+	helmValues, err := chartutils.RenderHelmValues(gardenCtx, r.GardenClient, helmValues, v1beta1constants.GardenNamespace, controllerDeployment.Resources)
+	if err != nil {
+		conditionValid = v1beta1helper.UpdatedConditionWithClock(r.Clock, conditionValid, gardencorev1beta1.ConditionFalse, "RenderingHelmValuesFailed", fmt.Sprintf("helm values cannot be rendered: %+v", err))
+		return reconcile.Result{}, err
 	}
 
 	seedIsGarden, err := gardenletutils.ClusterIsGarden(seedCtx, r.SeedClientSet.Client())

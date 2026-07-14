@@ -24,6 +24,7 @@ import (
 	"github.com/gardener/gardener/pkg/chartrenderer"
 	"github.com/gardener/gardener/pkg/client/kubernetes"
 	"github.com/gardener/gardener/pkg/utils"
+	chartutils "github.com/gardener/gardener/pkg/utils/chart"
 	gardenerutils "github.com/gardener/gardener/pkg/utils/gardener"
 	"github.com/gardener/gardener/pkg/utils/gardener/operator"
 	kubernetesutils "github.com/gardener/gardener/pkg/utils/kubernetes"
@@ -118,6 +119,11 @@ func (d *deployment) createOrUpdateAdmissionRuntimeClusterResources(ctx context.
 		}
 	}
 
+	helmValues, err = chartutils.RenderHelmValues(ctx, d.runtimeClientSet.Client(), helmValues, d.gardenNamespace, extension.Spec.Deployment.Resources)
+	if err != nil {
+		return fmt.Errorf("failed rendering Helm values for admission deployment: %w", err)
+	}
+
 	renderedChart, err := d.runtimeClientSet.ChartRenderer().RenderArchive(archive, extension.Name, v1beta1constants.GardenNamespace, utils.MergeMaps(helmValues, gardenerValues))
 	if err != nil {
 		return fmt.Errorf("failed rendering Helm chart %q: %w", extension.Spec.Deployment.AdmissionDeployment.RuntimeCluster.Helm.OCIRepository.GetURL(), err)
@@ -204,6 +210,12 @@ func (d *deployment) createOrUpdateAdmissionVirtualClusterResources(ctx context.
 			return err
 		}
 	}
+
+	helmValues, err = chartutils.RenderHelmValues(ctx, d.runtimeClientSet.Client(), helmValues, d.gardenNamespace, extension.Spec.Deployment.Resources)
+	if err != nil {
+		return fmt.Errorf("failed rendering Helm values for virtual cluster resources for admission: %w", err)
+	}
+
 	namespace := virtualNamespace(extension)
 	registry := managedresources.NewRegistry(kubernetes.GardenScheme, kubernetes.GardenCodec, kubernetes.GardenSerializer)
 	if err := registry.Add(namespace); err != nil {
