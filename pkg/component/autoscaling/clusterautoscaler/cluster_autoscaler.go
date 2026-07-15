@@ -272,7 +272,7 @@ func (c *clusterAutoscaler) Deploy(ctx context.Context) error {
 			Name:       v1beta1constants.DeploymentNameClusterAutoscaler,
 		}
 		vpa.Spec.UpdatePolicy = &vpaautoscalingv1.PodUpdatePolicy{
-			UpdateMode: new(vpaautoscalingv1.UpdateModeRecreate),
+			UpdateMode: new(vpaautoscalingv1.UpdateModeInPlaceOrRecreate),
 		}
 
 		containerPolicy := vpaautoscalingv1.ContainerResourcePolicy{
