@@ -36,7 +36,7 @@ var _ = Describe("SelfHostedShootExposure", func() {
 		ctx context.Context
 		c   client.Client
 
-		fakeClock *testclock.FakePassiveClock
+		fakeClock *testclock.FakeClock
 		now       time.Time
 
 		values   *Values
@@ -48,7 +48,7 @@ var _ = Describe("SelfHostedShootExposure", func() {
 	BeforeEach(func() {
 		ctx = context.TODO()
 		now = time.Date(2026, 05, 18, 0, 0, 0, 0, time.UTC)
-		fakeClock = testclock.NewFakePassiveClock(now)
+		fakeClock = testclock.NewFakeClock(now)
 
 		s := runtime.NewScheme()
 		Expect(extensionsv1alpha1.AddToScheme(s)).To(Succeed())
@@ -78,8 +78,7 @@ var _ = Describe("SelfHostedShootExposure", func() {
 			},
 		}
 
-		deployer = New(logr.Discard(), c, values)
-		deployer.Clock = fakeClock
+		deployer = New(logr.Discard(), c, fakeClock, values)
 		deployer.WaitInterval = time.Millisecond
 		deployer.WaitSevereThreshold = 250 * time.Millisecond
 		deployer.WaitTimeout = 500 * time.Millisecond
