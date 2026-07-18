@@ -16,6 +16,10 @@ import (
 
 // DefaultVerticalPodAutoscaler returns a deployer for the Kubernetes Vertical Pod Autoscaler.
 func (b *Botanist) DefaultVerticalPodAutoscaler() (vpa.Interface, error) {
+	if b.Shoot.IsWorkerless {
+		return nil, nil
+	}
+
 	imageAdmissionController, err := imagevector.Containers().FindImage(imagevector.ContainerImageNameVpaAdmissionController, imagevectorutils.RuntimeVersion(b.SeedVersion()), imagevectorutils.TargetVersion(b.ShootVersion()))
 	if err != nil {
 		return nil, err
@@ -85,7 +89,7 @@ func (b *Botanist) DefaultVerticalPodAutoscaler() (vpa.Interface, error) {
 			ClusterType:              component.ClusterTypeShoot,
 			IsManagedSeed:            isManagedSeed,
 			SecretNameServerCA:       v1beta1constants.SecretNameCACluster,
-			RuntimeKubernetesVersion: b.Seed.KubernetesVersion,
+			RuntimeKubernetesVersion: b.Shoot.RuntimeKubernetesVersion,
 			AdmissionController:      valuesAdmissionController,
 			Recommender:              valuesRecommender,
 			Updater:                  valuesUpdater,

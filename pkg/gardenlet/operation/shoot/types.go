@@ -57,7 +57,7 @@ import (
 type Builder struct {
 	shootObjectFunc              func(context.Context) (*gardencorev1beta1.Shoot, error)
 	cloudProfileFunc             func(context.Context, *gardencorev1beta1.Shoot) (*gardencorev1beta1.CloudProfile, error)
-	shootCredentialsFunc         func(context.Context, string, string, bool) (client.Object, error)
+	shootCredentialsFunc         func(context.Context, *gardencorev1beta1.Shoot) (client.Object, error)
 	serviceAccountIssuerHostname func() (*string, error)
 	shootDNSFunc                 func() *gardencorev1beta1.DNS
 	seed                         *gardencorev1beta1.Seed
@@ -81,7 +81,10 @@ type Shoot struct {
 
 	// ControlPlaneNamespace is the namespace in which the control plane components run.
 	ControlPlaneNamespace string
-	KubernetesVersion     *semver.Version
+	// RuntimeKubernetesVersion is the Kubernetes version of the cluster that runs the shoot control plane.
+	RuntimeKubernetesVersion *semver.Version
+	// KubernetesVersion is the Kubernetes version of the cluster that runs the shoot system components.
+	KubernetesVersion *semver.Version
 
 	// InternalClusterDomain is empty for self-hosted shoots, which only have an external domain (Shoot.spec.dns.domain).
 	InternalClusterDomain *string

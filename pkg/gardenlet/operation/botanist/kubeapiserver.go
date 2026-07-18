@@ -56,7 +56,7 @@ func (b *Botanist) DefaultKubeAPIServer(ctx context.Context) (kubeapiserver.Inte
 		b.GardenClient,
 		b.Shoot.ControlPlaneNamespace,
 		b.Shoot.GetInfo().ObjectMeta,
-		b.Seed.KubernetesVersion,
+		b.Shoot.RuntimeKubernetesVersion,
 		b.Shoot.KubernetesVersion,
 		b.SecretsManager,
 		"",
@@ -205,11 +205,10 @@ func (b *Botanist) DeployKubeAPIServer(ctx context.Context) error {
 		}, b.Logger)
 
 	var seedPods *net.IPNet
-	seedPodSpec := b.Seed.GetInfo().Spec.Networks.Pods
-	if seedPodSpec != "" {
-		_, seedPods, err = net.ParseCIDR(seedPodSpec)
+	if b.Seed != nil && b.Seed.GetInfo().Spec.Networks.Pods != "" {
+		_, seedPods, err = net.ParseCIDR(b.Seed.GetInfo().Spec.Networks.Pods)
 		if err != nil {
-			return fmt.Errorf("failed to parse seed pod network CIDR %q: %w", seedPodSpec, err)
+			return fmt.Errorf("failed to parse seed pod network CIDR %q: %w", b.Seed.GetInfo().Spec.Networks.Pods, err)
 		}
 	}
 

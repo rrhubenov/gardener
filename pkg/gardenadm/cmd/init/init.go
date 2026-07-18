@@ -102,7 +102,7 @@ func run(ctx context.Context, opts *Options) error {
 		deployGardenNamespace = g.Add(flow.Task{
 			Name: "Deploying garden namespace",
 			Fn: func(ctx context.Context) error {
-				return gardenerutils.ReconcileGardenNamespace(ctx, b.SeedClientSet.Client(), v1beta1constants.GardenNamespace, b.Seed.GetInfo().Spec.Provider.Zones, true, nil)
+				return gardenerutils.ReconcileGardenNamespace(ctx, b.SeedClientSet.Client(), v1beta1constants.GardenNamespace, v1beta1helper.ControlPlaneWorkerPoolForShoot(b.Shoot.GetInfo().Spec.Provider.Workers).Zones, true, nil)
 			},
 		})
 		deployCloudProviderSecret = g.Add(flow.Task{
@@ -123,7 +123,7 @@ func run(ctx context.Context, opts *Options) error {
 		reconcileClusterResource = g.Add(flow.Task{
 			Name: "Reconciling extensions.gardener.cloud/v1alpha1.Cluster resource",
 			Fn: func(ctx context.Context) error {
-				return gardenerextensions.SyncClusterResourceToSeed(ctx, b.SeedClientSet.Client(), b.Shoot.ControlPlaneNamespace, b.Shoot.GetInfo(), b.Shoot.CloudProfile, b.Seed.GetInfo())
+				return gardenerextensions.SyncClusterResourceToSeed(ctx, b.SeedClientSet.Client(), b.Shoot.ControlPlaneNamespace, b.Shoot.GetInfo(), b.Shoot.CloudProfile, nil)
 			},
 			Dependencies: flow.NewTaskIDs(ensureCustomResourceDefinitionsReady),
 		})
@@ -152,7 +152,9 @@ func run(ctx context.Context, opts *Options) error {
 					return b.Shoot.Components.ControlPlane.ResourceManager.Deploy(ctx)
 				}
 
-				return flow.Parallel(
+				// Deploy sequentially: only `RuntimeResourceManager` installs the `ManagedResource` CRD, and
+				// `ResourceManager.Deploy` creates a `ManagedResource` object on the same client.
+				return flow.Sequential(
 					b.Shoot.Components.ControlPlane.RuntimeResourceManager.Deploy,
 					b.Shoot.Components.ControlPlane.ResourceManager.Deploy,
 				)(ctx)

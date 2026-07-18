@@ -44,7 +44,7 @@ func NewBuilder() *Builder {
 		cloudProfileFunc: func(context.Context, *gardencorev1beta1.Shoot) (*gardencorev1beta1.CloudProfile, error) {
 			return nil, fmt.Errorf("cloudprofile object is required but not set")
 		},
-		shootCredentialsFunc: func(context.Context, string, string, bool) (client.Object, error) {
+		shootCredentialsFunc: func(context.Context, *gardencorev1beta1.Shoot) (client.Object, error) {
 			return nil, fmt.Errorf("shoot credentials object is required but not set")
 		},
 		serviceAccountIssuerHostname: func() (*string, error) {
@@ -119,31 +119,35 @@ func (b *Builder) WithExposureClassObject(exposureClass *gardencorev1beta1.Expos
 }
 
 // WithShootCredentialsFrom sets the shootCredentialsFunc attribute at the Builder after fetching it from the given reader.
-func (b *Builder) WithShootCredentialsFrom(c client.Reader) *Builder {
-	b.shootCredentialsFunc = func(ctx context.Context, namespace, bindingName string, fromSecretBinding bool) (client.Object, error) {
+func (b *Builder) WithShootCredentialsFrom(gardenReader client.Reader) *Builder {
+	b.shootCredentialsFunc = func(ctx context.Context, shoot *gardencorev1beta1.Shoot) (client.Object, error) {
+		if shoot.Spec.SecretBindingName == nil && shoot.Spec.CredentialsBindingName == nil {
+			return &corev1.Secret{}, nil
+		}
+
 		var key types.NamespacedName
-		if fromSecretBinding {
+		if shoot.Spec.SecretBindingName != nil {
 			binding := &gardencorev1beta1.SecretBinding{}
-			if err := c.Get(ctx, client.ObjectKey{Namespace: namespace, Name: bindingName}, binding); err != nil {
+			if err := gardenReader.Get(ctx, client.ObjectKey{Namespace: shoot.Namespace, Name: *shoot.Spec.SecretBindingName}, binding); err != nil {
 				return nil, err
 			}
 			key = client.ObjectKey{Namespace: binding.SecretRef.Namespace, Name: binding.SecretRef.Name}
-		} else {
+		} else if shoot.Spec.CredentialsBindingName != nil {
 			binding := &securityv1alpha1.CredentialsBinding{}
-			if err := c.Get(ctx, client.ObjectKey{Namespace: namespace, Name: bindingName}, binding); err != nil {
+			if err := gardenReader.Get(ctx, client.ObjectKey{Namespace: shoot.Namespace, Name: *shoot.Spec.CredentialsBindingName}, binding); err != nil {
 				return nil, err
 			}
 			key = client.ObjectKey{Namespace: binding.CredentialsRef.Namespace, Name: binding.CredentialsRef.Name}
 
 			if binding.CredentialsRef.GroupVersionKind() == securityv1alpha1.SchemeGroupVersion.WithKind("WorkloadIdentity") {
 				workloadIdentity := &securityv1alpha1.WorkloadIdentity{}
-				if err := c.Get(ctx, key, workloadIdentity); err != nil {
+				if err := gardenReader.Get(ctx, key, workloadIdentity); err != nil {
 					return nil, err
 				}
 				return workloadIdentity, nil
 			} else if binding.CredentialsRef.GroupVersionKind() == gardencorev1beta1.SchemeGroupVersion.WithKind("InternalSecret") {
 				internalSecret := &gardencorev1beta1.InternalSecret{}
-				if err := c.Get(ctx, key, internalSecret); err != nil {
+				if err := gardenReader.Get(ctx, key, internalSecret); err != nil {
 					return nil, err
 				}
 				return internalSecret, nil
@@ -151,7 +155,7 @@ func (b *Builder) WithShootCredentialsFrom(c client.Reader) *Builder {
 		}
 
 		secret := &corev1.Secret{}
-		if err := c.Get(ctx, key, secret); err != nil {
+		if err := gardenReader.Get(ctx, key, secret); err != nil {
 			return nil, err
 		}
 
@@ -162,7 +166,9 @@ func (b *Builder) WithShootCredentialsFrom(c client.Reader) *Builder {
 
 // WithoutShootCredentials sets the shootCredentialsFunc attribute at the builder to return empty Secret as credentials.
 func (b *Builder) WithoutShootCredentials() *Builder {
-	b.shootCredentialsFunc = func(context.Context, string, string, bool) (client.Object, error) { return &corev1.Secret{}, nil }
+	b.shootCredentialsFunc = func(context.Context, *gardencorev1beta1.Shoot) (client.Object, error) {
+		return &corev1.Secret{}, nil
+	}
 	return b
 }
 
@@ -205,7 +211,7 @@ func (b *Builder) WithServiceAccountIssuerHostname(secret *corev1.Secret) *Build
 }
 
 // Build initializes a new Shoot object.
-func (b *Builder) Build(ctx context.Context, c client.Reader) (*Shoot, error) {
+func (b *Builder) Build(ctx context.Context, seedClientSet kubernetes.Interface, gardenReader client.Reader) (*Shoot, error) {
 	shoot := &Shoot{}
 
 	shootObject, err := b.shootObjectFunc(ctx)
@@ -226,19 +232,11 @@ func (b *Builder) Build(ctx context.Context, c client.Reader) (*Shoot, error) {
 	shoot.CloudProfile = cloudProfile
 	shoot.ExposureClass = b.exposureClass
 
-	if shootObject.Spec.SecretBindingName != nil {
-		credentials, err := b.shootCredentialsFunc(ctx, shootObject.Namespace, *shootObject.Spec.SecretBindingName, true)
-		if err != nil {
-			return nil, err
-		}
-		shoot.Credentials = credentials
-	} else if shootObject.Spec.CredentialsBindingName != nil {
-		credentials, err := b.shootCredentialsFunc(ctx, shootObject.Namespace, *shootObject.Spec.CredentialsBindingName, false)
-		if err != nil {
-			return nil, err
-		}
-		shoot.Credentials = credentials
+	credentials, err := b.shootCredentialsFunc(ctx, shootObject)
+	if err != nil {
+		return nil, err
 	}
+	shoot.Credentials = credentials
 
 	shoot.HibernationEnabled = v1beta1helper.HibernationIsEnabled(shootObject)
 	shoot.ControlPlaneNamespace = v1beta1helper.ControlPlaneNamespaceForShoot(shootObject)
@@ -261,7 +259,7 @@ func (b *Builder) Build(ctx context.Context, c client.Reader) (*Shoot, error) {
 	shoot.ServiceAccountIssuerHostname = serviceAccountIssuerHostname
 
 	// Determine information about external domain for shoot cluster.
-	externalDomain, err := gardenerutils.ConstructExternalDomain(ctx, c, shootObject, shoot.Credentials, b.defaultDomains)
+	externalDomain, err := gardenerutils.ConstructExternalDomain(ctx, gardenReader, shootObject, shoot.Credentials, b.defaultDomains)
 	if err != nil {
 		return nil, err
 	}
@@ -273,6 +271,12 @@ func (b *Builder) Build(ctx context.Context, c client.Reader) (*Shoot, error) {
 		return nil, err
 	}
 	shoot.KubernetesVersion = kubernetesVersion
+
+	runtimeKubernetesVersion, err := semver.NewVersion(seedClientSet.Version())
+	if err != nil {
+		return nil, err
+	}
+	shoot.RuntimeKubernetesVersion = runtimeKubernetesVersion
 
 	shoot.IsWorkerless = v1beta1helper.IsWorkerless(shoot.GetInfo())
 
@@ -288,7 +292,7 @@ func (b *Builder) Build(ctx context.Context, c client.Reader) (*Shoot, error) {
 
 	shoot.WantsClusterAutoscaler = v1beta1helper.ShootWantsClusterAutoscaler(shootObject)
 
-	if shoot.IsWorkerless && shootObject.Spec.Networking != nil {
+	if (shoot.IsSelfHosted() || shoot.IsWorkerless) && shootObject.Spec.Networking != nil {
 		networks, err := ToNetworks(shootObject, shoot.IsWorkerless)
 		if err != nil {
 			return nil, err
@@ -338,7 +342,7 @@ func (b *Builder) Build(ctx context.Context, c client.Reader) (*Shoot, error) {
 		lastOperation.Type == gardencorev1beta1.LastOperationTypeRestore &&
 		lastOperation.State != gardencorev1beta1.LastOperationStateSucceeded {
 		shootState := &gardencorev1beta1.ShootState{ObjectMeta: metav1.ObjectMeta{Name: shootObject.Name, Namespace: shootObject.Namespace}}
-		if err := c.Get(ctx, client.ObjectKeyFromObject(shootState), shootState); err != nil {
+		if err := gardenReader.Get(ctx, client.ObjectKeyFromObject(shootState), shootState); err != nil {
 			return nil, err
 		}
 		shoot.SetShootState(shootState)

@@ -26,6 +26,10 @@ import (
 
 // DefaultClusterAutoscaler returns a deployer for the cluster-autoscaler.
 func (b *Botanist) DefaultClusterAutoscaler() (clusterautoscaler.Interface, error) {
+	if b.Shoot.IsWorkerless {
+		return nil, nil
+	}
+
 	image, err := imagevector.Containers().FindImage(imagevector.ContainerImageNameClusterAutoscaler, imagevectorutils.RuntimeVersion(b.SeedVersion()), imagevectorutils.TargetVersion(b.ShootVersion()))
 	if err != nil {
 		return nil, err
@@ -39,7 +43,7 @@ func (b *Botanist) DefaultClusterAutoscaler() (clusterautoscaler.Interface, erro
 		b.Shoot.GetReplicas(1),
 		b.Shoot.GetInfo().Spec.Kubernetes.ClusterAutoscaler,
 		b.Shoot.GetInfo().Spec.Provider.Workers,
-		b.Seed.KubernetesVersion,
+		b.Shoot.RuntimeKubernetesVersion,
 		b.Shoot.KubernetesVersion,
 	), nil
 }
