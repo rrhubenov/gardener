@@ -87,7 +87,7 @@ var _ = Describe("Etcd", func() {
 			botanist.Shoot = &shootpkg.Shoot{
 				ControlPlaneNamespace: namespace,
 			}
-			botanist.Seed.SetInfo(&gardencorev1beta1.Seed{})
+			botanist.Seed.SetInfo(&gardencorev1beta1.Seed{ObjectMeta: metav1.ObjectMeta{Name: "test-seed"}})
 			botanist.Shoot.SetInfo(&gardencorev1beta1.Shoot{
 				Spec: gardencorev1beta1.ShootSpec{
 					Kubernetes: gardencorev1beta1.Kubernetes{
@@ -112,6 +112,7 @@ var _ = Describe("Etcd", func() {
 				expectedDefragmentationSchedule:   Equal(new("34 12 * * *")),
 				expectedMaintenanceTimeWindow:     Equal(maintenanceTimeWindow),
 				expectedHighAvailabilityEnabled:   Equal(v1beta1helper.IsHAControlPlaneConfigured(botanist.Shoot.GetInfo())),
+				expectedMemberNamePrefix:          Equal("test-seed"),
 			}
 		})
 
@@ -189,6 +190,37 @@ var _ = Describe("Etcd", func() {
 				NewEtcd = validator.NewEtcd
 
 				etcd, err := botanist.DefaultEtcd("events", class)
+				Expect(etcd).NotTo(BeNil())
+				Expect(err).NotTo(HaveOccurred())
+			})
+		})
+
+		Context("self-hosted shoot", func() {
+			BeforeEach(func() {
+				botanist.Shoot.SetInfo(&gardencorev1beta1.Shoot{
+					Spec: gardencorev1beta1.ShootSpec{
+						Kubernetes: gardencorev1beta1.Kubernetes{
+							Version: "1.27.2",
+						},
+						Maintenance: &gardencorev1beta1.Maintenance{
+							TimeWindow: &maintenanceTimeWindow,
+						},
+						Provider: gardencorev1beta1.Provider{
+							Workers: []gardencorev1beta1.Worker{
+								{Name: "cp-pool", ControlPlane: &gardencorev1beta1.WorkerControlPlane{}},
+							},
+						},
+					},
+				})
+				validator.expectedMemberNamePrefix = Equal("")
+			})
+
+			It("should not set MemberNamePrefix for self-hosted shoots", func() {
+				oldNewEtcd := NewEtcd
+				defer func() { NewEtcd = oldNewEtcd }()
+				NewEtcd = validator.NewEtcd
+
+				etcd, err := botanist.DefaultEtcd(role, class)
 				Expect(etcd).NotTo(BeNil())
 				Expect(err).NotTo(HaveOccurred())
 			})
@@ -501,6 +533,7 @@ type newEtcdValidator struct {
 	expectedHighAvailabilityEnabled   gomegatypes.GomegaMatcher
 	expectedMaintenanceTimeWindow     gomegatypes.GomegaMatcher
 	expectedAutoscalingConfiguration  gomegatypes.GomegaMatcher
+	expectedMemberNamePrefix          gomegatypes.GomegaMatcher
 }
 
 func (v *newEtcdValidator) NewEtcd(
@@ -529,6 +562,9 @@ func (v *newEtcdValidator) NewEtcd(
 		Expect(values.Autoscaling).To(v.expectedAutoscalingConfiguration)
 	} else {
 		Expect(values.Autoscaling).To(Equal(etcd.AutoscalingConfig{}))
+	}
+	if v.expectedMemberNamePrefix != nil {
+		Expect(values.MemberNamePrefix).To(v.expectedMemberNamePrefix)
 	}
 
 	return v

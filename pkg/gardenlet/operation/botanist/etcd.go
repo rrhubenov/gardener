@@ -41,6 +41,12 @@ func (b *Botanist) DefaultEtcd(role string, class etcd.Class) (etcd.Interface, e
 		TopologyAwareRoutingEnabled: b.Shoot.TopologyAwareRoutingEnabled,
 	}
 
+	// Prefix etcd member names with the seed name so that members can be distinguished across
+	// control plane migrations between seeds. Self-hosted shoots have no Seed object.
+	if !b.Shoot.IsSelfHosted() {
+		values.MemberNamePrefix = b.Seed.GetInfo().Name
+	}
+
 	defragmentationSchedule, err := determineDefragmentationSchedule(b.Shoot.GetInfo())
 	if err != nil {
 		return nil, err
