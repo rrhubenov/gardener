@@ -152,6 +152,7 @@
         '/.*gardener/etcd-druid$/',
         '/.*gardener/machine-controller-manager$/',
         '/.*gardener/terminal-controller-manager$/',
+        '/.*gardener/pvc-autoscaler$/',
         '/.*open-telemetry/opentelemetry-operator$/',
         '/sigs\\.k8s\\.io/controller-tools/',
       ],
@@ -313,6 +314,18 @@
       matchPackageNames: [
         'github.com/perses/perses-operator',
         'perses/perses-operator',
+      ],
+    },
+    {
+      // Group PVC Autoscaler updates in one PR.
+      groupName: 'pvc-autoscaler',
+      matchDatasources: [
+        'go',
+        'github-releases',
+      ],
+      matchPackageNames: [
+        'github.com/gardener/pvc-autoscaler',
+        'gardener/pvc-autoscaler',
       ],
     },
     {
