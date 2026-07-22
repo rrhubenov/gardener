@@ -7627,6 +7627,33 @@ var _ = Describe("Shoot Validation Tests", func() {
 					}))))
 				})
 			})
+
+			DescribeTable("forbid certain operations when shoot is self-hosted",
+				func(operation, forbiddenOp string) {
+					shoot.Namespace = "garden"
+					shoot.Spec.Provider.Workers[0].ControlPlane = &core.WorkerControlPlane{}
+					shoot.Spec.SecretBindingName = nil
+
+					metav1.SetMetaDataAnnotation(&shoot.ObjectMeta, "gardener.cloud/operation", operation)
+					Expect(ValidateShoot(shoot)).To(ContainElement(PointTo(MatchFields(IgnoreExtras, Fields{
+						"Type":   Equal(field.ErrorTypeForbidden),
+						"Field":  Equal("metadata.annotations[gardener.cloud/operation]"),
+						"Detail": ContainSubstring(fmt.Sprintf("operation '%s' is not permitted for self-hosted shoot clusters with unmanaged infrastructure", forbiddenOp)),
+					}))))
+					delete(shoot.Annotations, "gardener.cloud/operation")
+
+					metav1.SetMetaDataAnnotation(&shoot.ObjectMeta, "maintenance.gardener.cloud/operation", operation)
+					Expect(ValidateShoot(shoot)).To(ContainElement(PointTo(MatchFields(IgnoreExtras, Fields{
+						"Type":   Equal(field.ErrorTypeForbidden),
+						"Field":  Equal("metadata.annotations[maintenance.gardener.cloud/operation]"),
+						"Detail": ContainSubstring(fmt.Sprintf("operation '%s' is not permitted for self-hosted shoot clusters with unmanaged infrastructure", forbiddenOp)),
+					}))))
+					delete(shoot.Annotations, "maintenance.gardener.cloud/operation")
+				},
+
+				Entry("rotate-rollout-workers", "rotate-rollout-workers", "rotate-rollout-workers"),
+				Entry("rollout-workers", "rollout-workers", "rollout-workers"),
+			)
 		})
 
 		Context("scheduler name", func() {
@@ -10243,6 +10270,34 @@ var _ = Describe("Shoot Validation Tests", func() {
 				))
 			})
 		})
+	})
+
+	Describe("#ValidateHibernation", func() {
+		DescribeTable("validate hibernation",
+			func(hibernation *core.Hibernation, annotations map[string]string, isSelfHosted bool, matcher gomegatypes.GomegaMatcher) {
+				Expect(ValidateHibernation(annotations, hibernation, isSelfHosted, nil)).To(matcher)
+			},
+			Entry("nil hibernation", nil, nil, false, BeEmpty()),
+			Entry("hosted hibernation", &core.Hibernation{Enabled: new(true)}, nil, false, BeEmpty()),
+			Entry("self-hosted hibernation", &core.Hibernation{Enabled: new(true)}, nil, true, ConsistOf(PointTo(MatchFields(IgnoreExtras, Fields{
+				"Type":   Equal(field.ErrorTypeForbidden),
+				"Detail": Equal("hibernation is not supported for self-hosted shoots"),
+			})))),
+			Entry("forbidden annotation", &core.Hibernation{Enabled: new(true)}, map[string]string{"maintenance.gardener.cloud/operation": "rotate-credentials-start"}, false, ConsistOf(PointTo(MatchFields(IgnoreExtras, Fields{
+				"Type":   Equal(field.ErrorTypeForbidden),
+				"Detail": Equal("shoot cannot be hibernated when maintenance.gardener.cloud/operation annotation contains rotate-credentials-start operation"),
+			})))),
+			Entry("multiple forbidden annotations", &core.Hibernation{Enabled: new(true)}, map[string]string{"maintenance.gardener.cloud/operation": "rotate-etcd-encryption-key;rotate-serviceaccount-key-start"}, false, ConsistOf(
+				PointTo(MatchFields(IgnoreExtras, Fields{
+					"Type":   Equal(field.ErrorTypeForbidden),
+					"Detail": Equal("shoot cannot be hibernated when maintenance.gardener.cloud/operation annotation contains rotate-etcd-encryption-key operation"),
+				})),
+				PointTo(MatchFields(IgnoreExtras, Fields{
+					"Type":   Equal(field.ErrorTypeForbidden),
+					"Detail": Equal("shoot cannot be hibernated when maintenance.gardener.cloud/operation annotation contains rotate-serviceaccount-key-start operation"),
+				})),
+			)),
+		)
 	})
 
 	Describe("#ValidateHibernationSchedules", func() {

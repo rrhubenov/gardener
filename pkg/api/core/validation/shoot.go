@@ -336,7 +336,7 @@ func ValidateShootSpec(meta metav1.ObjectMeta, spec *core.ShootSpec, opts shootV
 	allErrs = append(allErrs, validateNetworking(spec.Networking, workerless, fldPath.Child("networking"))...)
 	allErrs = append(allErrs, validateMaintenance(spec.Maintenance, fldPath.Child("maintenance"), workerless)...)
 	allErrs = append(allErrs, validateMonitoring(spec.Monitoring, fldPath.Child("monitoring"))...)
-	allErrs = append(allErrs, ValidateHibernation(meta.Annotations, spec.Hibernation, fldPath.Child("hibernation"))...)
+	allErrs = append(allErrs, ValidateHibernation(meta.Annotations, spec.Hibernation, helper.IsShootSelfHosted(spec.Provider.Workers), fldPath.Child("hibernation"))...)
 
 	if len(spec.Region) == 0 {
 		allErrs = append(allErrs, field.Required(fldPath.Child("region"), "must specify a region"))
@@ -2894,11 +2894,15 @@ func ValidateSystemComponentWorkers(workers []core.Worker, fldPath *field.Path) 
 }
 
 // ValidateHibernation validates a Hibernation object.
-func ValidateHibernation(annotations map[string]string, hibernation *core.Hibernation, fldPath *field.Path) field.ErrorList {
+func ValidateHibernation(annotations map[string]string, hibernation *core.Hibernation, isSelfHosted bool, fldPath *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
 
 	if hibernation == nil {
 		return allErrs
+	}
+
+	if isSelfHosted {
+		return append(allErrs, field.Forbidden(fldPath, "hibernation is not supported for self-hosted shoots"))
 	}
 
 	for _, op := range v1beta1helper.GetShootMaintenanceOperations(annotations) {
@@ -3196,6 +3200,7 @@ func validateShootOperation(operations, maintenanceOperations []string, shoot *c
 		allErrs            = field.ErrorList{}
 		encryptedResources = sets.New[schema.GroupResource]()
 		k8sLess134         = versionutils.ConstraintK8sLess134.CheckVersion(shoot.Spec.Kubernetes.Version)
+		isSelfHosted       = helper.IsShootSelfHosted(shoot.Spec.Provider.Workers)
 	)
 
 	if len(operations) == 0 && len(maintenanceOperations) == 0 {
@@ -3207,6 +3212,8 @@ func validateShootOperation(operations, maintenanceOperations []string, shoot *c
 			return append(allErrs, field.NotSupported(fldPathOp, op, sets.List(availableShootOperations)))
 		} else if len(operations) > 1 && !availableShootOperationsToRunInParallel.Has(op) && !strings.HasPrefix(op, v1beta1constants.OperationRotateRolloutWorkers) && !strings.HasPrefix(op, v1beta1constants.OperationRolloutWorkers) {
 			return append(allErrs, field.Forbidden(fldPathOp, fmt.Sprintf("operation '%s' is not permitted to be run in parallel with other operations", op)))
+		} else if isSelfHosted && !helper.HasManagedInfrastructure(shoot) && (strings.HasPrefix(op, v1beta1constants.OperationRotateRolloutWorkers) || strings.HasPrefix(op, v1beta1constants.OperationRolloutWorkers)) {
+			return append(allErrs, field.Forbidden(fldPathOp, fmt.Sprintf("operation '%s' is not permitted for self-hosted shoot clusters with unmanaged infrastructure", op)))
 		}
 	}
 
@@ -3215,6 +3222,8 @@ func validateShootOperation(operations, maintenanceOperations []string, shoot *c
 			return append(allErrs, field.NotSupported(fldPathMaintOp, op, sets.List(availableShootOperations)))
 		} else if len(maintenanceOperations) > 1 && !availableShootOperationsToRunInParallel.Has(op) && !strings.HasPrefix(op, v1beta1constants.OperationRotateRolloutWorkers) && !strings.HasPrefix(op, v1beta1constants.OperationRolloutWorkers) {
 			return append(allErrs, field.Forbidden(fldPathMaintOp, fmt.Sprintf("operation '%s' is not permitted to be run in parallel with other operations", op)))
+		} else if isSelfHosted && !helper.HasManagedInfrastructure(shoot) && (strings.HasPrefix(op, v1beta1constants.OperationRotateRolloutWorkers) || strings.HasPrefix(op, v1beta1constants.OperationRolloutWorkers)) {
+			return append(allErrs, field.Forbidden(fldPathMaintOp, fmt.Sprintf("operation '%s' is not permitted for self-hosted shoot clusters with unmanaged infrastructure", op)))
 		}
 	}
 
