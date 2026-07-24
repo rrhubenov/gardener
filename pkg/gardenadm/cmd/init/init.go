@@ -554,7 +554,7 @@ func bootstrapControlPlane(ctx context.Context, opts *Options) (*gardenadmbotani
 		initializeSecretsManagement = g.Add(flow.Task{
 			Name:   "Initializing secrets management",
 			Fn:     b.InitializeSecretsManagement,
-			SkipIf: kubeconfigFileExists && !b.IsRestorePhase(),
+			SkipIf: kubeconfigFileExists && !b.Shoot.IsRestorePhase(),
 		})
 		writeKubeletBootstrapKubeconfig = g.Add(flow.Task{
 			Name:         "Writing kubelet bootstrap kubeconfig with a fake token to disk to make kubelet start",
@@ -573,7 +573,7 @@ func bootstrapControlPlane(ctx context.Context, opts *Options) (*gardenadmbotani
 			Fn: func(ctx context.Context) error {
 				return b.PersistBootstrapSecrets(ctx, opts.ConfigDir)
 			},
-			SkipIf:       b.IsRestorePhase(),
+			SkipIf:       b.Shoot.IsRestorePhase(),
 			Dependencies: flow.NewTaskIDs(deployOperatingSystemConfigSecretForNodeAgent),
 		})
 		applyOperatingSystemConfig = g.Add(flow.Task{
@@ -590,16 +590,20 @@ func bootstrapControlPlane(ctx context.Context, opts *Options) (*gardenadmbotani
 			}).RetryUntilTimeout(2*time.Second, 2*time.Minute),
 			Dependencies: flow.NewTaskIDs(applyOperatingSystemConfig),
 		})
-		_ = g.Add(flow.Task{
+		importSecrets = g.Add(flow.Task{
 			Name: "Importing secrets into control plane",
 			Fn: func(ctx context.Context) error {
-				if err := b.MigrateSecrets(ctx, b.SeedClientSet.Client(), clientSet.Client()); err != nil {
-					return err
-				}
+				return b.MigrateSecrets(ctx, b.SeedClientSet.Client(), clientSet.Client())
+			},
+			SkipIf:       kubeconfigFileExists && !b.Shoot.IsRestorePhase(),
+			Dependencies: flow.NewTaskIDs(persistBootstrapSecrets, initializeClientSet),
+		})
+		_ = g.Add(flow.Task{
+			Name: "Deleting temporary ShootState containing bootstrap secrets",
+			Fn: func(_ context.Context) error {
 				return b.CleanupBootstrapSecrets(opts.ConfigDir)
 			},
-			SkipIf:       kubeconfigFileExists && !b.IsRestorePhase(),
-			Dependencies: flow.NewTaskIDs(persistBootstrapSecrets, initializeClientSet),
+			Dependencies: flow.NewTaskIDs(importSecrets),
 		})
 	)
 
